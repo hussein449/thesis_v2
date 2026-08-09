@@ -25,8 +25,10 @@
  *   │ Road identification  │ Real     │ OpenStreetMap (way ref=M51,     │
  *   │                      │          │ highway=motorway, name=أتستراد   │
  *   │                      │          │ البحر)                          │
- *   │ Length (27.9 km)     │ Real     │ Polyline arc-length on OSM      │
- *   │                      │          │ Khalde → Awali River bridge     │
+ *   │ Length (28.6002 km)  │ Real     │ Measured centreline chainage,   │
+ *   │                      │          │ Khalde → Awali River bridge.    │
+ *   │                      │          │ The display polyline is 27.87   │
+ *   │                      │          │ km — a 13-vertex simplification │
  *   │ Polyline geometry    │ Real     │ OSRM simplified route geometry  │
  *   │                      │          │ truncated at the Awali bridge   │
  *   │ Speed limit (80)     │ Real     │ OSM maxspeed=80 on M51 ways +   │
@@ -36,10 +38,10 @@
  *   │                      │ (range)  │ — 200 000 veh/day enter Beirut  │
  *   │                      │          │ via the southern entrance;      │
  *   │                      │          │ corridor avg ≈ 90 000 veh/day.  │
- *   │ Annual accidents     │ Derived  │ Independent traffic-safety      │
- *   │                      │          │ groups: 8 %–12 % of Lebanon's   │
- *   │                      │          │ 4 259/yr casualty crashes →     │
- *   │                      │          │ 150–250 RTAs/yr on this stretch │
+ *   │ Annual accidents     │ Real     │ Corridor crash records: 1 152   │
+ *   │ (446/yr)             │          │ crashes, 2016-01 to 2018-07,    │
+ *   │                      │          │ annualised. Supersedes the      │
+ *   │                      │          │ earlier 150–250/yr estimate     │
  *   │ Pavement condition   │ Estimate │ Modeller, from Mapillary/SV +   │
  *   │                      │          │ World Bank P160223 PAD (2017)   │
  *   │                      │          │ which flags national highway    │
@@ -54,12 +56,20 @@
  *     way["ref"="M51"]["highway"="motorway"]
  *   © OpenStreetMap contributors, ODbL — https://www.openstreetmap.org/copyright
  *
- * LENGTH (27.9 km)
- *   Arc-length of the OSRM-routed polyline below, from the Khalde M51
- *   interchange (33.7780°N, 35.4904°E) to the Awali River bridge
- *   (33.5963°N, 35.3727°E). The Awali crossing is the administrative
+ * LENGTH (28.6002 km)
+ *   Measured centreline chainage from the Khalde M51 interchange
+ *   (33.7780°N, 35.4904°E) to the Awali River bridge (33.5963°N, 35.3727°E) —
+ *   the same chainage the crash panel, the region boundaries and the fitted
+ *   risk table are all built on. The Awali crossing is the administrative
  *   boundary between Mount Lebanon and South Governorate and a natural
  *   terminus for the high-traffic Beirut→Saida half of the M51.
+ *
+ *   The `polyline` below is a 13-vertex simplification whose arc length is
+ *   27.87 km: straight chords cut the corners the real road follows. It is a
+ *   drawing, not a measurement. Chainage is mapped onto it by fraction in
+ *   buildRoadPath() (src/lib/geometry.js), so positions stay correct across
+ *   the full 28.6 km. Do not treat the two lengths as interchangeable — the
+ *   previous 27.9 km value conflated them.
  *
  * SPEED LIMIT (80 km/h)
  *   OSM `maxspeed=80` tag on the M51 motorway ways. Cross-checked with
@@ -79,7 +89,23 @@
  *   before the Awali boundary. A flow-weighted average of ~90 000 veh/day
  *   is used as the single corridor-level AADT figure for risk scoring.
  *
- * ANNUAL ACCIDENTS (200 RTA/yr — midpoint of 150–250 corridor range)
+ * ANNUAL ACCIDENTS (446 RTA/yr — measured)
+ *   Superseded the earlier 200/yr estimate when corridor crash records became
+ *   available. 1 152 crashes were recorded on the Khalde → Awali stretch over
+ *   the 31 months from 2016-01 to 2018-07, which annualises to 446/yr. This is
+ *   a count from the corridor itself, not a share of a national total.
+ *
+ *   The figure is roughly double the earlier estimate. The earlier estimate
+ *   was built by attributing 8 %–12 % of Lebanon's national casualty-crash
+ *   count to this corridor; the records show that share was too low for this
+ *   stretch. Both derivations are kept below so the change is auditable.
+ *
+ *   Accident GENERATION no longer uses this number at all. Expected crashes
+ *   come from per-region, per-time-slot rates fitted on the same records
+ *   (../data/risk-table.json), and the corridor total is an output of that
+ *   model — it reproduces 446/yr without being told to.
+ *
+ *   SUPERSEDED — the earlier derivation, retained for reference:
  *   Estimated by independent traffic-safety groups as ≈ 8 %–12 % of national
  *   serious transit casualties attributable to the high-speed, poorly lit
  *   M51 Southern Coastal Highway corridor (specifically the Khalde → Awali
@@ -103,12 +129,10 @@
  *       analysis on this corridor), reflecting that not all casualty-class
  *       crashes in the national total are coded to this mainline.
  *
- *   Value chosen: 200 RTA/yr — the midpoint of the 150–250 range. This is
- *   a defensible point estimate; the `accidents` field can be set anywhere
- *   in [150, 250] without invalidating the model. Downstream code uses this
- *   only to derive the corridor-wide daily total d_total_per_day = N_year / 365
- *   (§2 of the simplified-model report); spatial distribution across
- *   highway sections is handled separately by manual risk scoring (§3-4).
+ *   Value formerly chosen: 200 RTA/yr, the midpoint of the 150–250 range,
+ *   used to derive a corridor-wide daily total d_total_per_day = N_year / 365
+ *   which was then spread across sections by manual risk scoring. Both that
+ *   constant and the manual scoring have been replaced by the fitted model.
  *
  * PAVEMENT CONDITION (2.7 / 5)
  *   IRI-equivalent visual rating by the modeller from Mapillary and Google
@@ -126,16 +150,23 @@
  *   This input is NOT extracted from a published condition survey.
  *
  * Composite risk index — Poisson-derived (Step 4 of supervisor's revision):
- *   μ = 0.40 · (accidents / 250)
+ *   μ = 0.40 · (accidents / 500)
  *     + 0.25 · (AADT      / 50 000)
  *     + 0.20 · (speedKmh  / 120)
  *     + 0.15 · ((5 − condition) / 4)
  *   R = 1 − exp(−μ)        ∈ (0, 1)
  *
- *   For M51 Khalde→Awali at the midpoint estimate of 200 acc/yr:
- *     μ = 0.40·0.800 + 0.25·1.800 + 0.20·0.667 + 0.15·0.575
- *       = 0.320 + 0.450 + 0.133 + 0.086 = 0.989
- *     R = 1 − e^(−0.989) ≈ 0.628
+ *   For M51 Khalde→Awali at the measured 446 acc/yr:
+ *     μ = 0.40·0.892 + 0.25·1.800 + 0.20·0.667 + 0.15·0.575
+ *       = 0.357 + 0.450 + 0.133 + 0.086 = 1.026
+ *     R = 1 − e^(−1.026) ≈ 0.642
+ *
+ *   DISPLAY ONLY. This index is not the risk model. It scores a whole road
+ *   from four road-level attributes and is used for cross-road comparison in
+ *   the allocation table; with a single corridor it never affects allocation.
+ *   Where accidents actually occur, and how often, comes from the fitted
+ *   per-region rates in ../data/risk-table.json. The two are independent and
+ *   will not agree — do not read this number as a validation of that model.
  *
  *   References: Hauer 1997 "Observational Before-After Studies in Road
  *   Safety"; AASHTO HSM 2010 Ch. 10 (Poisson SPFs); Lord & Mannering 2010
@@ -149,14 +180,21 @@ export const ROADS = [
     name: 'M51 Khalde → Awali (South Coastal Highway, northern stretch)',
     shortName: 'M51 Khalde-Awali',
     color: '#ef4444',
-    // Annual severe accidents on the Khalde-Awali M51 stretch.
-    // Range 150–250 (≈ 8 %–12 % of Lebanon's 4 259/yr casualty crashes,
-    // per independent traffic-safety groups). 200 is the midpoint.
-    accidents: 200,
+    // Annual crashes on the Khalde-Awali M51 stretch: 446, measured — 1 152
+    // crashes recorded over the 31 months from 2016-01 to 2018-07, annualised.
+    // Supersedes the earlier 200 (midpoint of an assumed 150–250 range derived
+    // from a national share); see the ANNUAL CRASHES note above.
+    //
+    // This value no longer drives accident generation — the fitted per-region
+    // rates in ../data/risk-table.json do — and is retained for the composite
+    // road index and for display.
+    accidents: 446,
     accidentsRange: [150, 250],
     aadt: 90000,
     speedKmh: 80,
-    lengthKm: 27.9,
+    // Measured centreline chainage, not the display polyline (27.87 km).
+    // See buildRoadPath() in src/lib/geometry.js.
+    lengthKm: 28.6002,
     condition: 2.7,
     source:
       'Identification: OSM way ref=M51, highway=motorway, name=أتستراد البحر ' +
@@ -181,11 +219,18 @@ export const ROADS = [
       'between Mount Lebanon and South Governorate, immediately north of Saida (Sidon). ' +
       'This is the highest-flow, poorly-lit half of the M51 corridor and the focus of ' +
       'the patrol study.',
-    // Manual curvature override (C_i) per 1-km section, 0..2.
-    // The polyline-derived heuristic is unreliable on a 13-vertex polyline
-    // — real road curves between vertices score 0 because the chord is
-    // straight. These values are read by risk-scoring.js#defaultSectionScores
-    // and follow the geography of the M51 corridor:
+    // UNUSED by the model — retained as corridor documentation.
+    //
+    // Manual curvature override (C_i) per 1-km section, 0..2. These were an
+    // input to the manual T/C/M risk scoring, which the fitted rate table
+    // replaced; nothing reads them now. Curvature still enters the model, but
+    // as measured degrees per km inside the fitted equation (`ln_curv`,
+    // +0.225), not as a hand-assigned 0-2 band.
+    //
+    // Kept because the km-by-km description below is an accurate record of the
+    // corridor's alignment and is worth not losing. Note it describes 28
+    // sections against the corrected 28.6002 km length, which now yields 29.
+    // The values follow the geography of the M51 corridor:
     //   km  0-2   Khalde interchange (ramps + curve) → 1
     //   km  3-5   straight motorway south of Khalde → 0
     //   km  5-7   Damour approach (coastal bend) → 1
@@ -255,14 +300,19 @@ export const ROADS = [
  *      "The statistical analysis of crash-frequency data".
  */
 const W1 = 0.40, W2 = 0.25, W3 = 0.20, W4 = 0.15
-// ACC_REF is the upper bound of the corridor accident range (250 acc/yr,
-// = 12 % of Lebanon's 4 259/yr casualty crashes attributed to the M51
-// Khalde→Awali stretch by independent traffic-safety groups). With this
-// reference the midpoint estimate (200) gives A_norm = 0.8, comfortably
-// inside [0, 1]. The previous value (20, a per-road urban-arterial
-// baseline) was a leftover from the multi-road dataset and gave
-// A_norm ≈ 10 for the single corridor, which saturated R near 1.
-const ACC_REF   = 250   // accidents/yr reference (corridor-range upper bound)
+// ACC_REF is the reference accident count the corridor is scored against.
+// Raised from 250 to 500 when the measured count replaced the 150–250
+// estimate: at ACC_REF = 250 the measured 446 acc/yr gives A_norm = 1.78,
+// which contradicts this block's own claim that the predictors are
+// normalised into [0, 1]. At 500 — a round bound above the measured value —
+// A_norm = 0.892 and the composite reads as intended.
+//
+// Honest caveat: these are exposure ratios against reference values, not
+// min-max normalisations. T_norm has always exceeded 1 (90 000 / 50 000 =
+// 1.8), and no rescaling here changes that. The index is ordinal and is
+// used for display and cross-road comparison only — accident generation and
+// patrol allocation are driven by the fitted rate table, not by this.
+const ACC_REF   = 500   // accidents/yr reference (round bound above measured 446)
 const AADT_REF  = 50000 // veh/day reference
 const SPEED_REF = 120   // km/h reference
 const COND_RANGE = 4    // condition scale is 1–5 → max deviation = 4

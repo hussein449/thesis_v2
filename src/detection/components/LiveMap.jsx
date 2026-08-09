@@ -11,16 +11,10 @@ import { POLICIES } from '../lib/policies'
 import { BEIRUT_CENTER, BEIRUT_ZOOM, computeRiskScore } from '../../partitioning/lib/roads'
 import { buildSections, DEFAULT_SECTION_LENGTH_KM } from '../../partitioning/lib/sections'
 import {
-  defaultSectionScores,
-  computeRiskMatrix,
-  dailyAccidentRate,
+  buildRiskMatrix,
   TIME_SLOTS,
   timeSlotForHour,
 } from '../../partitioning/lib/risk-scoring'
-import {
-  computeSlotProbabilities,
-  computeSectionTimeSlotRates,
-} from '../../partitioning/lib/accident-generator'
 import { buildPatrolSegments } from '../../partitioning/lib/uav-segments'
 import { computeIotDetection, DEFAULT_R_IOT } from '../lib/iot-alert'
 
@@ -65,13 +59,17 @@ function heatColor(t) {
 
 const TIME_SCALE = 30 // 1 second of wall time = 30 simulated seconds
 // Visualisation-only multiplier so accidents arrive on a watchable cadence
-// in the Live Trial. Tuned so the corridor's real ~200 accidents/yr produce
-// an event every ~5 wall-seconds at TIME_SCALE = 30:
-//   real rate ≈ 6.3 × 10⁻⁶ events/s; with boost × TIME_SCALE × dt this
-//   gives ~0.2 events per wall-second.
+// in the Live Trial — an event every ~5 wall-seconds at TIME_SCALE = 30,
+// i.e. ~0.2 events per wall-second.
+//
+// Retuned from 1200 when the corridor rate was corrected from an assumed
+// ~200 accidents/yr to the measured 446: 1200 × 200/446 ≈ 540. Left at 1200
+// the Live Trial would run 2.2x busier than the cadence it was designed for.
+// This changes only how fast the demo looks, never the physics.
+//
 // The Monte-Carlo sweep does NOT use this — it runs detection-sim.simulateOnce
 // directly with the user's config (real rates, no boost).
-const DEMO_RATE_BOOST = 1200
+const DEMO_RATE_BOOST = 540
 // Detected accidents linger for this many sim-seconds (≈2.7 wall-seconds at
 // TIME_SCALE=30), fading over the last DETECTED_FADE_SIM, then are removed
 // from the map. Missed accidents are left in place so the operator can see
@@ -230,12 +228,9 @@ function drawPatrolSegments(map, rs) {
 function makeRoadState(allocation, params, rng, patrolMode) {
   return allocation.map(({ road, drones: nDrones }) => {
     const path = buildRoadPath(road)
-    // Build the section-time-slot rate model for this road.
+    // Fitted section-time-slot rate model for this road.
     const sections = buildSections(road.lengthKm)
-    const scores = defaultSectionScores(road)
-    const riskMatrix = computeRiskMatrix(scores)
-    const slotProbs = computeSlotProbabilities(riskMatrix)
-    const rateMatrix = computeSectionTimeSlotRates(dailyAccidentRate(road.accidents), slotProbs)
+    const riskMatrix = buildRiskMatrix(road)
 
     // §6 patrol segments. Each UAV gets exactly one [A_m, B_m].
     const segments = nDrones > 0
@@ -290,7 +285,7 @@ function makeRoadState(allocation, params, rng, patrolMode) {
       path,
       segments,
       droneStates,
-      rateMatrix,
+      riskMatrix,
     }
   })
 }
@@ -701,13 +696,11 @@ export default function LiveMap({ N, policyKey, params: paramsProp }) {
         ? TIME_SLOTS[forcedSlotIdx]
         : timeSlotForHour(simHour)
       const slotIdx = slot.index - 1
-      // For the forced regime, treat the daily rate as if spread across
-      // all 24 h (so scale by B / 24h instead of by 1 / slotDurationSec).
-      // Net effect: same daily total as Auto mode, but with the forced
-      // slot's section-distribution P(i|b).
-      const slotDurationSec = forcedSlotIdx != null
-        ? 24 * 3600 / TIME_SLOTS.length  // = (24h)/B = ~4.8h per slot equivalent
-        : (slot.endHour - slot.startHour) * 3600
+      // λ_{i,b} is the expected count over the slot's own hours, so dividing
+      // by those hours recovers the fitted hourly rate. For a forced regime
+      // the slot's rate is applied across all 24 h, which is the same
+      // division — the day is simply longer than the slot.
+      const slotDurationSec = (slot.endHour - slot.startHour) * 3600
       // DEMO_RATE_BOOST accelerates the demo beyond the corridor's real
       // rate so events arrive on a watchable cadence. Monte-Carlo metrics
       // are unaffected — that path uses simulateOnce() with no boost.
@@ -716,9 +709,9 @@ export default function LiveMap({ N, policyKey, params: paramsProp }) {
       const v = st.params.droneSpeed
       for (let r = 0; r < st.roadStates.length; r++) {
         const rs = st.roadStates[r]
-        for (const row of rs.rateMatrix) {
-          // λ_{i,b}/day → per-second within the slot:
-          const lambdaPerSec = row.lambda[slotIdx] / slotDurationSec
+        for (const row of rs.riskMatrix) {
+          // λ_{i,b} (expected crashes over the slot) → per-second:
+          const lambdaPerSec = row.lambdaDay[slotIdx] / slotDurationSec
           const expected = lambdaPerSec * boost * dt
           if (st.rng() < expected) {
             // Uniform position within the section:

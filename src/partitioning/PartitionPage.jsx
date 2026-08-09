@@ -132,7 +132,7 @@ function RiskScoreTable({ allocations }) {
         </div>
         <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2 text-[9px]">
           {[
-            { label: 'A — Accident history', color: 'text-red-800', note: 'accidents / 250 (ref = corridor upper bound)' },
+            { label: 'A — Accident history', color: 'text-red-800', note: 'accidents / 500 (ref above measured 446)' },
             { label: 'T — Traffic intensity', color: 'text-amber-700', note: 'AADT / 50 000 (ref)' },
             { label: 'S — Speed contribution', color: 'text-blue-800', note: 'speed / 120 km/h (ref)' },
             { label: 'C — Pavement condition', color: 'text-emerald-800', note: '(5 − cond) / 4 · inverted' },

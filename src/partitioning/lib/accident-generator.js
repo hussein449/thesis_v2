@@ -1,91 +1,51 @@
 /**
- * Accident Event Generator — Simplified UAV-IoT Accident Simulation Model
- * =======================================================================
+ * Accident Event Generator — driven by fitted crash rates
+ * ========================================================
  *
- * Implements §4 ("Risk to Section-Time Accident Rate") and §5
- * ("Generation of Accident Time and Location") of the model report.
+ * Generates concrete accident events from the fitted rate matrix produced by
+ * risk-scoring.buildRiskMatrix().
  *
- * §4 — Split the corridor-wide daily total equally across the B = 5 time
- *       slots, then distribute each slot's share across sections in
- *       proportion to the manual risk score R_{i,b}:
+ *   N_{i,b}(d)  ~  Poisson(λ_{i,b})     λ_{i,b} = R_{i,b} · length_i · h_b
+ *   τ_k         ~  U(t_start_b, t_end_b)   time of day, hours
+ *   s_k         ~  U(s_start_i, s_end_i)   chainage along the corridor, km
  *
- *         λ_day_b      = λ_day_total / B
- *         P(i | b)     = (R_{i,b} + ε) / Σ_n (R_{n,b} + ε)
- *         λ_day_{i,b}  = λ_day_b · P(i | b)
+ * Each accident is stored as a tuple (τ_k, i_k, s_k).
  *
- * §5 — Generate concrete events per day:
- *         N_{i,b}(d)  ~  Poisson(λ_day_{i,b})
- *         τ_k         ~  U(t_start_b, t_end_b)   (time of day in hours)
- *         s_k         ~  U(s_start_i, s_end_i)   (km along the corridor)
+ * WHAT CHANGED, AND WHY IT MATTERS
  *
- *       Each accident is stored as a tuple (τ_k, i_k, s_k).
+ * The previous version distributed an assumed corridor total:
  *
- * Inputs are expected to come from risk-scoring.js: the N × B riskMatrix
- * and the corridor-wide dailyTotal. RNG is seedable via makeRng() from
- * detection-sim.js so trials are reproducible.
+ *     λ_day_b     = λ_day_total / B            ← equal share to every slot
+ *     P(i | b)    = (R_{i,b} + ε) / Σ_n (…)    ← risk decided only WHERE
+ *     λ_day_{i,b} = λ_day_b · P(i | b)
+ *
+ * Two consequences, both now gone:
+ *
+ *   1. Time of day had no effect on HOW MANY accidents occurred, only on
+ *      where they landed. Every slot received exactly one fifth of the day
+ *      regardless of the weights, so a "morning rush" simulation generated no
+ *      more accidents than a night one.
+ *   2. Slots are unequal (6, 4, 6, 4, 4 hours), so an equal share meant the
+ *      6-hour night slot carried the same expected count as the 4-hour rush,
+ *      i.e. a systematically lower rate per hour on the busiest roads.
+ *
+ * Rates are now absolute — crashes per km per hour — so each section-slot is
+ * drawn independently and the corridor total emerges from the model. There is
+ * nothing left to normalise, which is why ε has gone too: it existed to keep
+ * an all-zero-score section from having zero probability under a normalised
+ * distribution. A fitted rate is strictly positive everywhere, so no smoothing
+ * constant is needed.
  */
 
 import { TIME_SLOTS } from './risk-scoring'
 
-/**
- * Smoothing constant added to every R_{i,b} so a section with all-zero
- * scores still has positive probability of being chosen. The report
- * suggests 0.05 (used by default) or 1.0 (when T, C, M are integer-only
- * and you want all sections roughly equal-weighted).
- */
-export const EPSILON_DEFAULT = 0.05
-
 // ---------------------------------------------------------------------------
-// §4 — Section-Time accident rate distribution
+// Poisson sampling
 // ---------------------------------------------------------------------------
 
 /**
- * Normalised risk per (section, time slot): P(i | b).
- * Returns one row per section with a P array of length B (one entry per
- * time slot). Column sums across sections equal 1 for every slot.
- */
-export function computeSlotProbabilities(riskMatrix, epsilon = EPSILON_DEFAULT) {
-  if (!Array.isArray(riskMatrix) || riskMatrix.length === 0) {
-    throw new Error('riskMatrix must be a non-empty array')
-  }
-  const numSlots = TIME_SLOTS.length
-  const slotSums = new Array(numSlots).fill(0)
-  for (const row of riskMatrix) {
-    for (let b = 0; b < numSlots; b++) {
-      slotSums[b] += row.R[b] + epsilon
-    }
-  }
-  return riskMatrix.map((row) => ({
-    sectionIndex: row.sectionIndex,
-    sStart: row.sStart,
-    sEnd: row.sEnd,
-    P: row.R.map((rib, b) => (rib + epsilon) / slotSums[b]),
-  }))
-}
-
-/**
- * Per-section per-slot daily Poisson rate λ_day_{i,b}.
- * Each row carries an array `lambda[b]` of length B.
- *   λ_day_{i,b} = (λ_day_total / B) · P(i | b)
- */
-export function computeSectionTimeSlotRates(dailyTotal, slotProbabilities) {
-  if (dailyTotal < 0) throw new Error('dailyTotal must be non-negative')
-  const perSlotTotal = dailyTotal / TIME_SLOTS.length
-  return slotProbabilities.map((row) => ({
-    sectionIndex: row.sectionIndex,
-    sStart: row.sStart,
-    sEnd: row.sEnd,
-    lambda: row.P.map((p) => perSlotTotal * p),
-  }))
-}
-
-// ---------------------------------------------------------------------------
-// §5 — Accident event generation
-// ---------------------------------------------------------------------------
-
-/**
- * Knuth's algorithm for Poisson(λ). Adequate for the small λ values we
- * see per (section, slot, day) — typically well under 1.
+ * Knuth's algorithm for Poisson(λ). Adequate for the small λ values we see
+ * per (section, slot, day) — typically well under 1.
  *   k = 0; p = 1
  *   do { k++; p *= U; } while (p > exp(-λ))
  *   return k - 1
@@ -103,32 +63,50 @@ export function samplePoisson(lambda, rng) {
   return k - 1
 }
 
+// ---------------------------------------------------------------------------
+// Event generation
+// ---------------------------------------------------------------------------
+
 /**
- * Generate every accident event for one calendar day, given the per-
- * (section, slot) rate matrix from computeSectionTimeSlotRates().
+ * Generate every accident event for one calendar day from the risk matrix.
  *
- * `forceTimeSlot` (optional, 1..5 or null): when set, ALL events for the
- * day are generated under the chosen slot's section-distribution P(i|b),
- * with the daily rate scaled by B=5 so total events/day matches the
- * corridor's natural rate. tau is then uniform across the full 24-hour
- * day. Use this to study a single time-of-day regime (e.g. "simulate
- * 30 days where every hour is morning rush") without losing Monte
- * Carlo statistics to a 4-hour-window-only sub-sample.
+ * `forceTimeSlot` (optional, 1..5 or null): when set, the whole day runs under
+ * the chosen slot's risk regime — every hour of the 24-hour day is treated as
+ * if it were that slot, so the day's expected count is the slot's hourly rate
+ * applied for 24 hours. Use this to study one time-of-day regime without
+ * losing Monte Carlo statistics to a 4-hour sub-sample.
+ *
+ * Note this now changes the number of accidents, not just their placement: a
+ * day of morning rush genuinely produces more accidents than a day of night,
+ * which is the point of the fitted rates.
  *
  * Returns events sorted by time of day. Each event is a tuple:
  *   {
- *     id:            'D{day}_{n}'           unique within the run
+ *     id:            'D{day}_{n}'   unique within the run
  *     day:           integer day number
  *     timeSlot:      1..5
  *     sectionIndex:  1..N
+ *     region:        region supplying the rate, for reporting
  *     tau:           hour of day in [t_start_b, t_end_b], or [0, 24)
  *                    when forceTimeSlot is set
- *     s:             km along the corridor in [s_start_i, s_end_i]
+ *     s:             chainage in km, in [s_start_i, s_end_i]
  *   }
  */
-export function generateAccidentsForDay(rateMatrix, day, rng, forceTimeSlot = null) {
+export function generateAccidentsForDay(riskMatrix, day, rng, forceTimeSlot = null) {
   const events = []
   let seq = 1
+
+  const push = (row, slot, tau) => {
+    events.push({
+      id: `D${day}_${seq++}`,
+      day,
+      timeSlot: slot.index,
+      sectionIndex: row.sectionIndex,
+      region: row.region,
+      tau,
+      s: row.sStart + rng() * (row.sEnd - row.sStart),
+    })
+  }
 
   if (forceTimeSlot != null) {
     if (!Number.isInteger(forceTimeSlot) ||
@@ -137,46 +115,22 @@ export function generateAccidentsForDay(rateMatrix, day, rng, forceTimeSlot = nu
     }
     const b = forceTimeSlot - 1
     const slot = TIME_SLOTS[b]
-    // Scale lambda by B so the daily total matches a normal day. The
-    // section weighting P(i|b) for the chosen slot is preserved
-    // because row.lambda[b] already encodes (dailyTotal/B) · P(i|b).
-    const scale = TIME_SLOTS.length // = B
-    for (const row of rateMatrix) {
-      const lam = row.lambda[b] * scale
-      const n = samplePoisson(lam, rng)
-      for (let k = 0; k < n; k++) {
-        // Events distributed across the full day so drones see arrivals
-        // at all hours — but each event's risk profile is locked to
-        // the forced slot.
-        const tau = rng() * 24
-        const s = row.sStart + rng() * (row.sEnd - row.sStart)
-        events.push({
-          id: `D${day}_${seq++}`,
-          day,
-          timeSlot: slot.index,
-          sectionIndex: row.sectionIndex,
-          tau,
-          s,
-        })
-      }
+    const slotHours = slot.endHour - slot.startHour
+    // Stretch the slot's hourly rate over the full 24 hours.
+    const dayScale = 24 / slotHours
+    for (const row of riskMatrix) {
+      const n = samplePoisson(row.lambdaDay[b] * dayScale, rng)
+      // Arrivals spread across the whole day so drones see traffic at all
+      // hours, while the risk regime stays locked to the forced slot.
+      for (let k = 0; k < n; k++) push(row, slot, rng() * 24)
     }
   } else {
-    for (const row of rateMatrix) {
+    for (const row of riskMatrix) {
       for (let b = 0; b < TIME_SLOTS.length; b++) {
         const slot = TIME_SLOTS[b]
-        const lam = row.lambda[b]
-        const n = samplePoisson(lam, rng)
+        const n = samplePoisson(row.lambdaDay[b], rng)
         for (let k = 0; k < n; k++) {
-          const tau = slot.startHour + rng() * (slot.endHour - slot.startHour)
-          const s = row.sStart + rng() * (row.sEnd - row.sStart)
-          events.push({
-            id: `D${day}_${seq++}`,
-            day,
-            timeSlot: slot.index,
-            sectionIndex: row.sectionIndex,
-            tau,
-            s,
-          })
+          push(row, slot, slot.startHour + rng() * (slot.endHour - slot.startHour))
         }
       }
     }
@@ -187,8 +141,7 @@ export function generateAccidentsForDay(rateMatrix, day, rng, forceTimeSlot = nu
 }
 
 /**
- * Format an hour-of-day float as "HH:MM" (per the report's example
- * "τ = 8.25 → 08:15").
+ * Format an hour-of-day float as "HH:MM" (τ = 8.25 → 08:15).
  */
 export function formatHour(hour) {
   const h = Math.floor(hour) % 24
@@ -197,44 +150,40 @@ export function formatHour(hour) {
 }
 
 // ---------------------------------------------------------------------------
-// Top-level: from risk model → list of accident events
+// Top-level: risk matrix → list of accident events
 // ---------------------------------------------------------------------------
 
 /**
- * Run the full §4 + §5 pipeline over `days` consecutive days.
+ * Run the generator over `days` consecutive days.
  *
  *   args:
- *     riskMatrix  — output of risk-scoring.computeRiskMatrix()
- *     dailyTotal  — output of risk-scoring.dailyAccidentRate(annual)
+ *     riskMatrix  — output of risk-scoring.buildRiskMatrix()
  *     days        — integer ≥ 1 (default 1)
  *     rng         — seedable function returning [0, 1) (e.g. makeRng(seed))
- *     epsilon     — smoothing constant for P(i|b)
  *
  *   returns:
- *     {
- *       slotProbabilities: [{ sectionIndex, sStart, sEnd, P[B] }, …],
- *       rateMatrix:        [{ sectionIndex, sStart, sEnd, lambda[B] }, …],
- *       events:            [(τ, i, s) tuples, sorted by (day, tau)]
- *     }
+ *     { riskMatrix, events, expectedPerDay }
+ *
+ * `expectedPerDay` is the corridor's expected accidents per day implied by the
+ * fitted rates — useful as a check that the generated sample matches the model.
  */
-export function generateAccidents({
-  riskMatrix,
-  dailyTotal,
-  days = 1,
-  rng,
-  epsilon = EPSILON_DEFAULT,
-}) {
+export function generateAccidents({ riskMatrix, days = 1, rng }) {
   if (typeof rng !== 'function') {
     throw new Error('rng must be a function returning a number in [0, 1)')
+  }
+  if (!Array.isArray(riskMatrix) || riskMatrix.length === 0) {
+    throw new Error('riskMatrix must be a non-empty array')
   }
   if (!Number.isInteger(days) || days < 1) {
     throw new Error('days must be a positive integer')
   }
-  const slotProbabilities = computeSlotProbabilities(riskMatrix, epsilon)
-  const rateMatrix = computeSectionTimeSlotRates(dailyTotal, slotProbabilities)
   const events = []
   for (let d = 1; d <= days; d++) {
-    events.push(...generateAccidentsForDay(rateMatrix, d, rng))
+    events.push(...generateAccidentsForDay(riskMatrix, d, rng))
   }
-  return { slotProbabilities, rateMatrix, events }
+  const expectedPerDay = riskMatrix.reduce(
+    (sum, row) => sum + row.lambdaDay.reduce((a, b) => a + b, 0),
+    0
+  )
+  return { riskMatrix, events, expectedPerDay }
 }

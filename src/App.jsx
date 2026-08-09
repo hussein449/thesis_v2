@@ -8,6 +8,7 @@ import CommLog from './components/CommLog'
 import FleetGrid from './components/FleetGrid'
 import Settings from './components/Settings'
 import Results from './components/ResultsPage'
+import { RISK_PROVENANCE, ANNUAL_CRASHES } from './partitioning/lib/risk-scoring'
 // import LoraApp from './lora/LoraApp'
 import DetectionPage from './detection/DetectionPage'
 import HardwareEventsPage from './hardware/HardwareEventsPage'
@@ -113,11 +114,21 @@ function AppHeader({
           <circle cx="20" cy="20" r="1.4" fill="#1E4D2B" />
         </svg>
         <div className="leading-none">
-          <div className="text-[13px] font-bold text-[var(--color-white)] tracking-tight">
+          <div className="text-[13px] font-bold text-[var(--color-white)] tracking-tight flex items-center gap-1.5">
             Command Center
+            {/* Marks the fitted-risk-model build. v1 scored risk by hand on a
+                0-2 scale; v2 uses crash rates fitted on corridor data. The two
+                produce different numbers, so builds must be distinguishable at
+                a glance when comparing screenshots. */}
+            <span
+              title={`Fitted risk model · ${RISK_PROVENANCE.source} · ${ANNUAL_CRASHES} crashes/yr`}
+              className="px-1.5 py-[1px] rounded text-[8px] font-bold tracking-wider bg-[var(--color-gold)]/20 text-[var(--color-gold)] ring-1 ring-[var(--color-gold)]/40"
+            >
+              V2
+            </span>
           </div>
           <div className="text-[8.5px] uppercase tracking-[0.18em] text-[var(--color-sidebar-muted)] mt-1 font-semibold">
-            UAV Dispatch · Risk Ops
+            UAV Dispatch · Risk Ops · Fitted model
           </div>
         </div>
       </div>

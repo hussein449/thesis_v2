@@ -23,10 +23,7 @@
 import { ROADS } from '../../partitioning/lib/roads.js'
 import { buildPatrolSegments } from '../../partitioning/lib/uav-segments.js'
 import { buildSections } from '../../partitioning/lib/sections.js'
-import {
-  defaultSectionScores,
-  computeRiskMatrix,
-} from '../../partitioning/lib/risk-scoring.js'
+import { buildRiskMatrix } from '../../partitioning/lib/risk-scoring.js'
 
 // ---------------------------------------------------------------------------
 // Corridor metadata (M51 Khalde → Awali)
@@ -73,8 +70,7 @@ let _riskModel = null
 function getRiskModel() {
   if (_riskModel) return _riskModel
   const sections = buildSections(CORRIDOR_LENGTH_KM)
-  const scores = defaultSectionScores(M51)
-  const riskMatrix = computeRiskMatrix(scores)
+  const riskMatrix = buildRiskMatrix(M51)
   _riskModel = { sections, riskMatrix }
   return _riskModel
 }

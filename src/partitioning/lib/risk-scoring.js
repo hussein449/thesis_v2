@@ -1,35 +1,65 @@
 /**
- * Manual Risk Scoring — Simplified UAV-IoT Accident Simulation Model
- * ==================================================================
+ * Fitted Risk Rates — M51 Corridor Crash-Frequency Model
+ * ======================================================
  *
- * Implements §2 ("Historical Data to Total Daily Accident Rate") and §3
- * ("Manual Risk Calculation by Section and Time Slot") of the model
- * report (May 13, 2026).
+ * Replaces the manual T/C/M scoring that previously stood in for a risk
+ * model. Risk is no longer a 0-2 score with hand-set weights; it is a fitted
+ * crash rate in CRASHES PER KILOMETRE PER HOUR, estimated from 1,085 cells of
+ * observed crash data on this corridor (2016-01 to 2018-07).
  *
- * §2 — Daily corridor rate from historical annual count
- *   d_total_per_day = N_hist_year / 365
+ *   R_{i,b}  =  rate for the region containing section i, in time slot b
  *
- * §3 — Per-section, per-time-slot risk score
- *   For each highway section i and time slot b:
- *     R_{i,b} = a_b · T_i + c_b · C_i + m_b · M_i
- *   where:
- *     T_i ∈ {0, 1, 2}   traffic intensity in section i
- *     C_i ∈ {0, 1, 2}   curvature risk in section i
- *     M_i ∈ {0, 1, 2}   merging / entrance / exit risk in section i
- *     a_b, c_b, m_b     time-slot weights (see WEIGHTS table)
+ * WHAT THIS CHANGES
  *
- * Note: highway sections (S_i) are the 1-km partition produced by
- * sections.js. They are NOT UAV patrol segments.
+ *   Before:  R_{i,b} = a_b·T_i + c_b·C_i + m_b·M_i, with T, C, M assigned by
+ *            hand in {0,1,2} and the weights a_b, c_b, m_b chosen so each
+ *            slot's row summed to 1. R was unitless and ordinal — it could
+ *            rank sections but could not say how often anything happened, so
+ *            the corridor's accident count had to be supplied separately as
+ *            an assumed 200/yr.
+ *
+ *   After:   R carries units. Expected crashes in section i during slot b is
+ *            R_{i,b} × length_km × slot_hours, and summing that over the whole
+ *            corridor and year reproduces the observed 446 crashes/yr without
+ *            any tuning constant. The annual figure is now an OUTPUT.
+ *
+ * RESOLUTION. The model was fitted on seven corridor regions, so seven rates
+ * per slot is the honest resolution. The 1-km section grid is retained because
+ * accident positions, patrol segments and the map all use it — each section
+ * simply takes the rate of the region containing it. Sections inside a region
+ * are identical by construction; no within-region detail is invented.
+ *
+ * WHY THE MODEL DOES NOT NAME MERGING SEPARATELY. Ramp density is in the
+ * fitted equation (`ln_ramps`), but on this corridor it fits NEGATIVE
+ * (-0.361, p = 0.005) — sections with more ramps record fewer crashes, the
+ * opposite of what the old M_i score assumed. That coefficient is a property
+ * of the data, not an error, and it is kept. It acts inside the fitted rates
+ * rather than as a visible factor, so the simulator never asserts anywhere
+ * that ramps make a road safer.
+ *
+ * Source table: ../data/risk-table.json — see its `provenance` block for the
+ * fitted equation, coefficients and dispersion.
  */
 
+// Import attribute included so this module also loads under plain Node (for
+// scripts and tests), not only through the Vite pipeline.
+import table from '../data/risk-table.json' with { type: 'json' }
 import { buildSections, DEFAULT_SECTION_LENGTH_KM } from './sections'
-import { buildRoadPath, positionAt } from '../../lib/geometry'
 
 // ---------------------------------------------------------------------------
-// Time slots and weight table (verbatim from §3 of the model report)
+// Time slots
 // ---------------------------------------------------------------------------
 
-/** Five time slots that divide the 24-hour day, indexed 1..5. */
+/**
+ * Five time slots dividing the 24-hour day, indexed 1..5. These match the
+ * slot definitions the model was fitted on exactly, so a slot index here and
+ * a slot in the crash panel mean the same hours.
+ *
+ * Note the slots are NOT equal length: 6, 4, 6, 4, 4 hours. The old model
+ * gave each an equal share of the day's accidents, which understated the
+ * rush-hour rate per hour and overstated the night rate. Rates are per hour,
+ * so the asymmetry now takes care of itself.
+ */
 export const TIME_SLOTS = [
   { index: 1, label: 'Night / early morning', startHour: 0,  endHour: 6  },
   { index: 2, label: 'Morning rush',          startHour: 6,  endHour: 10 },
@@ -38,25 +68,10 @@ export const TIME_SLOTS = [
   { index: 5, label: 'Late evening',          startHour: 20, endHour: 24 },
 ]
 
-/**
- * Weights of the three risk components per time slot.
- *   a — traffic weight
- *   c — curvature weight
- *   m — merging weight
- * Each row sums to 1.0, so R_{i,b} ∈ [0, 2·(a+c+m)] = [0, 2].
- *
- * Rationale (from the report):
- *   At night, curvature matters more because of speed and visibility.
- *   During rush hours, traffic and merging dominate because of congestion,
- *   entrances, exits, and lane changes.
- */
-export const WEIGHTS = {
-  1: { a: 0.20, c: 0.50, m: 0.30 }, // Night / early morning
-  2: { a: 0.50, c: 0.20, m: 0.30 }, // Morning rush
-  3: { a: 0.40, c: 0.30, m: 0.30 }, // Normal day
-  4: { a: 0.50, c: 0.20, m: 0.30 }, // Evening rush
-  5: { a: 0.30, c: 0.40, m: 0.30 }, // Late evening
-}
+/** Hours covered by each slot, indexed 1..5. */
+export const SLOT_HOURS = Object.fromEntries(
+  TIME_SLOTS.map((s) => [s.index, s.endHour - s.startHour])
+)
 
 /** Time slot whose [startHour, endHour) interval contains `hour` (0..24). */
 export function timeSlotForHour(hour) {
@@ -68,194 +83,181 @@ export function timeSlotForHour(hour) {
 }
 
 // ---------------------------------------------------------------------------
-// §2 — Historical data → daily corridor rate
+// The fitted rate table
 // ---------------------------------------------------------------------------
+
+/** Regions with their chainage bounds and per-slot rates, as fitted. */
+export const RISK_TABLE = table
+
+/** Provenance of the fitted rates — surfaced in the UI so the figures are traceable. */
+export const RISK_PROVENANCE = table.provenance
 
 /**
- * Total expected severe accidents per day across the whole corridor.
- * This is the only place where historical annual data enters the model;
- * spatial distribution comes from R_{i,b} (§3 + §4).
+ * Corridor-wide expected crashes per year, implied by the rate table.
+ * This is a model output, not an assumption: 445.9/yr, matching the observed
+ * count over the study period.
  */
-export function dailyAccidentRate(annualAccidents) {
-  if (annualAccidents < 0) throw new Error('annualAccidents must be non-negative')
-  return annualAccidents / 365
-}
+export const ANNUAL_CRASHES = table.annualCrashes
 
-// ---------------------------------------------------------------------------
-// §3 — R_{i,b} = a_b·T_i + c_b·C_i + m_b·M_i
-// ---------------------------------------------------------------------------
-
-function validateScore(name, x) {
-  if (!Number.isInteger(x) || x < 0 || x > 2) {
-    throw new Error(`${name} must be an integer in {0, 1, 2}, got ${x}`)
+/**
+ * Region whose [kmStart, kmEnd) contains chainage `km`. The last region is
+ * closed on the right so km = L resolves.
+ */
+export function regionAtKm(km) {
+  const regions = RISK_TABLE.regions
+  const last = regions[regions.length - 1]
+  if (km >= last.kmStart) return last
+  for (const r of regions) {
+    if (km >= r.kmStart && km < r.kmEnd) return r
   }
+  return regions[0]
 }
 
 /**
- * Compute R_{i,b} for one section in one time slot.
- *   scores: { T, C, M } with each ∈ {0, 1, 2}
- *   timeSlotIndex: 1..5
+ * Fitted crash rate at a single chainage, in crashes per km per hour.
  */
-export function computeSectionRisk(scores, timeSlotIndex) {
-  validateScore('T', scores.T)
-  validateScore('C', scores.C)
-  validateScore('M', scores.M)
-  const w = WEIGHTS[timeSlotIndex]
-  if (!w) throw new Error(`Invalid time slot ${timeSlotIndex}; expected 1..5`)
-  return w.a * scores.T + w.c * scores.C + w.m * scores.M
-}
-
-/**
- * Compute the full N × B risk matrix R_{i,b}.
- *   sectionScores: array of { sectionIndex, sStart, sEnd, T, C, M }
- *   returns: array of { sectionIndex, sStart, sEnd, T, C, M, R: [r1, r2, r3, r4, r5] }
- * where R[b - 1] is the score for time slot b.
- */
-export function computeRiskMatrix(sectionScores) {
-  return sectionScores.map((s) => ({
-    sectionIndex: s.sectionIndex,
-    sStart: s.sStart,
-    sEnd: s.sEnd,
-    T: s.T,
-    C: s.C,
-    M: s.M,
-    R: TIME_SLOTS.map((slot) => computeSectionRisk(s, slot.index)),
-  }))
-}
-
-// ---------------------------------------------------------------------------
-// Default T / C / M scoring for the M51 Khalde → Awali corridor
-// ---------------------------------------------------------------------------
-//
-// The model report leaves T_i, C_i, M_i to be assigned manually. The
-// defaults below are a reasonable starting point derived from the
-// corridor's geometry and known interchange list. They can be overridden
-// per section by editing the returned array.
-
-/**
- * Major merging events on the Khalde → Awali stretch, in km from Khalde.
- * Score 2 marks a major interchange (multiple lanes joining/leaving);
- * score 1 marks a simple on/off ramp. Sections that overlap a POI inherit
- * its score; sections with no nearby POI keep M_i = 0.
- */
-const MERGE_POIS_KM = [
-  { km: 0.0,  label: 'Khalde interchange',  score: 2 },
-  { km: 4.5,  label: 'Damour approach ramps', score: 1 },
-  { km: 9.5,  label: 'Damour exit ramps',   score: 1 },
-  { km: 13.5, label: 'Jiyeh on/off',        score: 1 },
-  { km: 17.0, label: 'Saadiyat on/off',     score: 1 },
-  { km: 20.5, label: 'Rmeileh approach',    score: 1 },
-  { km: 24.0, label: 'Rmeileh exit',        score: 1 },
-  { km: 27.0, label: 'Awali bridge approach', score: 2 },
-]
-
-function defaultTrafficScore(midKm, corridorLengthKm) {
-  // U-shaped traffic profile for M51 Khalde → Awali:
-  //   - Khalde end (km 0–5): heavy Beirut commuter load + suburban
-  //     traffic feeding the corridor → T = 2.
-  //   - Awali end (km 22–28): Saida local traffic + Awali-bridge
-  //     approach + entry to Saida proper → T = 2.
-  //   - Middle (km 5–22, Damour ↔ Rmeileh): open inter-urban motorway
-  //     between rural villages, no major commuter load, no major
-  //     interchanges along most of this stretch → T = 0. The earlier
-  //     scoring used T = 1 here, but ground truth is closer to "open
-  //     motorway with sparse local traffic" than "moderate urban
-  //     traffic" — dropping to 0 makes the rush-hour U-shape match
-  //     the corridor's actual geography. Side effect: end-section
-  //     fraction of slot-2 accidents rises from ~43 % to ~70 %, which
-  //     gives Risk-aware a real hot-spot to exploit.
-  const frac = midKm / corridorLengthKm
-  if (frac < 0.18) return 2
-  if (frac < 0.78) return 0
-  return 2
-}
-
-function defaultMergingScore(sStartKm, sEndKm) {
-  // Section "owns" a POI if the POI falls within its [sStart, sEnd] band,
-  // OR within 0.5 km of either boundary (so a ramp straddling two
-  // adjacent 1-km sections is captured by both).
-  let best = 0
-  for (const poi of MERGE_POIS_KM) {
-    if (poi.km >= sStartKm - 0.5 && poi.km <= sEndKm + 0.5) {
-      if (poi.score > best) best = poi.score
-    }
+export function rateAt(km, timeSlotIndex) {
+  const region = regionAtKm(km)
+  const rate = region.ratePerKmHour[String(timeSlotIndex)]
+  if (rate == null) {
+    throw new Error(
+      `No fitted rate for slot ${timeSlotIndex} in region ${region.region}`
+    )
   }
-  return best
+  return rate
 }
 
 /**
- * Curvature score from the road polyline: total absolute heading change
- * accumulated within the section, sampled at ~100 m steps.
- *   > 18° total turn → 2 (sharp curve)
- *   >  7° total turn → 1 (mild curve)
- *   else            → 0 (straight)
- */
-function defaultCurvatureScore(path, sStartM, sEndM) {
-  const step = 100
-  let prevAngle = null
-  let totalChange = 0
-  for (let s = sStartM; s <= sEndM - step; s += step) {
-    const [x1, y1] = positionAt(path, s)
-    const [x2, y2] = positionAt(path, Math.min(path.totalLength, s + step))
-    const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI
-    if (prevAngle !== null) {
-      let diff = angle - prevAngle
-      while (diff >  180) diff -= 360
-      while (diff < -180) diff += 360
-      totalChange += Math.abs(diff)
-    }
-    prevAngle = angle
-  }
-  if (totalChange > 18) return 2
-  if (totalChange >  7) return 1
-  return 0
-}
-
-/**
- * Build default { T, C, M } scores for every 1-km section of the given
- * road. Pure function — callers are free to mutate or override entries
- * before passing the result to computeRiskMatrix().
+ * Fitted rate over a span of chainage, length-weighted across every region the
+ * span overlaps.
  *
- * Returns an array of:
- *   { sectionIndex, sStart, sEnd, length, T, C, M }
+ * Region boundaries sit at 6.306, 8.786, 11.969, 17.004, 19.982 and 23.082 km
+ * — none of them on a 1-km mark — so six of the 29 sections straddle two
+ * regions. Taking the rate at the section's midpoint would assign the whole
+ * section to one side and silently move crashes between regions: it loses
+ * 0.8% of the corridor total, enough that the generated annual count would no
+ * longer reconcile with the fitted 446/yr. Weighting by overlap preserves it
+ * exactly.
+ *
+ * The denominator is the length actually covered by the table rather than the
+ * requested span, so a section running a hair past the final boundary through
+ * floating-point slack still returns that region's rate instead of a value
+ * diluted toward zero.
  */
-export function defaultSectionScores(road, sectionLengthKm = DEFAULT_SECTION_LENGTH_KM) {
-  const path = buildRoadPath(road)
+export function rateOverSpan(kmStart, kmEnd, timeSlotIndex) {
+  let weighted = 0
+  let covered = 0
+  for (const r of RISK_TABLE.regions) {
+    const lo = Math.max(kmStart, r.kmStart)
+    const hi = Math.min(kmEnd, r.kmEnd)
+    if (hi > lo) {
+      const rate = r.ratePerKmHour[String(timeSlotIndex)]
+      if (rate == null) {
+        throw new Error(
+          `No fitted rate for slot ${timeSlotIndex} in region ${r.region}`
+        )
+      }
+      weighted += rate * (hi - lo)
+      covered += hi - lo
+    }
+  }
+  if (covered <= 0) return rateAt((kmStart + kmEnd) / 2, timeSlotIndex)
+  return weighted / covered
+}
+
+/** Region covering the most of [kmStart, kmEnd) — for labelling only. */
+export function dominantRegion(kmStart, kmEnd) {
+  let best = null
+  let bestOverlap = -1
+  for (const r of RISK_TABLE.regions) {
+    const overlap = Math.min(kmEnd, r.kmEnd) - Math.max(kmStart, r.kmStart)
+    if (overlap > bestOverlap) {
+      bestOverlap = overlap
+      best = r
+    }
+  }
+  return best ?? RISK_TABLE.regions[0]
+}
+
+// ---------------------------------------------------------------------------
+// Risk matrix
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the full N × B risk matrix over the corridor's 1-km sections.
+ *
+ * Each row carries:
+ *   R          — per-km-hour rate for each of the five slots
+ *   lambdaDay  — expected crashes in this section per slot per day,
+ *                R[b] × length × slot_hours. This is what the accident
+ *                generator draws from; no renormalisation follows it.
+ *   region     — name of the region supplying the rate, for display
+ *
+ * `T`, `C`, `M` are gone. Nothing downstream should reconstruct them: they
+ * were inputs to a scoring formula this model replaces, not measurements.
+ */
+export function buildRiskMatrix(road, sectionLengthKm = DEFAULT_SECTION_LENGTH_KM) {
   const sections = buildSections(road.lengthKm, sectionLengthKm)
   return sections.map((sec) => {
-    const midKm = (sec.sStart + sec.sEnd) / 2
-    // Curvature: if the road declares a manual sectionCurvature array,
-    // prefer that — it overrides the polyline-derived heuristic, which
-    // is unreliable on coarsely-simplified geometries (the M51 polyline
-    // has only 13 vertices, so most real road curves fall between
-    // straight chords and would score 0 otherwise).
-    const manualC = road.sectionCurvature?.[sec.index - 1]
-    const C = (Number.isInteger(manualC) && manualC >= 0 && manualC <= 2)
-      ? manualC
-      : defaultCurvatureScore(path, sec.sStart * 1000, sec.sEnd * 1000)
+    const region = dominantRegion(sec.sStart, sec.sEnd)
+    const R = TIME_SLOTS.map((slot) => rateOverSpan(sec.sStart, sec.sEnd, slot.index))
     return {
       sectionIndex: sec.index,
       sStart: sec.sStart,
       sEnd: sec.sEnd,
       length: sec.length,
-      T: defaultTrafficScore(midKm, road.lengthKm),
-      C,
-      M: defaultMergingScore(sec.sStart, sec.sEnd),
+      region: region.region,
+      R,
+      lambdaDay: R.map((r, b) => r * sec.length * SLOT_HOURS[b + 1]),
     }
   })
 }
 
 /**
- * One-call helper: from a road object, return the daily corridor rate AND
- * the full N × B risk matrix using the default T / C / M heuristic.
+ * Daily-average risk per section, in crashes per km per hour, weighted by slot
+ * length:
+ *
+ *   R_i = Σ_b R_{i,b}·h_b / Σ_b h_b
+ *
+ * The old model used a flat 1/B mean over the five slots. That treated a
+ * 6-hour night and a 4-hour rush hour as equally weighted, biasing the daily
+ * average toward the two long low-risk slots. Used by the risk-aware patrol
+ * segmentation.
+ */
+export function dailyMeanRate(row) {
+  let weighted = 0
+  let hours = 0
+  for (const slot of TIME_SLOTS) {
+    weighted += row.R[slot.index - 1] * SLOT_HOURS[slot.index]
+    hours += SLOT_HOURS[slot.index]
+  }
+  return weighted / hours
+}
+
+// ---------------------------------------------------------------------------
+// Top level
+// ---------------------------------------------------------------------------
+
+/**
+ * Corridor risk model: the section grid, the fitted risk matrix, and the
+ * implied corridor total.
+ *
+ * `dailyTotal` is derived from the fitted rates rather than from an assumed
+ * annual count — it is reported for display and cross-checking, and no longer
+ * feeds the accident generator, which draws each section independently.
  */
 export function buildCorridorRiskModel(road, sectionLengthKm = DEFAULT_SECTION_LENGTH_KM) {
-  const scores = defaultSectionScores(road, sectionLengthKm)
+  const riskMatrix = buildRiskMatrix(road, sectionLengthKm)
+  const dailyTotal = riskMatrix.reduce(
+    (sum, row) => sum + row.lambdaDay.reduce((a, b) => a + b, 0),
+    0
+  )
   return {
-    dailyTotal: dailyAccidentRate(road.accidents),
-    sectionScores: scores,
-    riskMatrix: computeRiskMatrix(scores),
+    riskMatrix,
+    dailyTotal,
+    annualTotal: dailyTotal * 365,
     timeSlots: TIME_SLOTS,
-    weights: WEIGHTS,
+    slotHours: SLOT_HOURS,
+    provenance: RISK_PROVENANCE,
   }
 }

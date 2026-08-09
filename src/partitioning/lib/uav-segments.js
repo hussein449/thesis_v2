@@ -9,13 +9,21 @@
  *           A_m = (m-1) · L / M     B_m = m · L / M
  *
  *   §6.2  Risk-aware patrol — group the 1-km highway sections so each UAV
- *         segment carries roughly equal cumulative risk. Per-section risk
- *         is averaged across the B = 5 time slots:
- *           R_i = (1/B) · Σ_b R_{i,b}
+ *         segment carries roughly equal cumulative risk. Per-section risk is
+ *         the section's EXPECTED CRASHES PER DAY, summed over the five slots:
+ *           R_i = Σ_b λ_{i,b}  where  λ_{i,b} = rate_{i,b} · length_i · h_b
  *         Greedy left-to-right walk: keep adding sections to the current
  *         UAV segment until its cumulative risk reaches totalRisk / M;
  *         then start a new segment. The boundary section is included or
  *         excluded based on whichever side is closer to the target.
+ *
+ *         This used to be a flat mean of the five unitless slot scores,
+ *         (1/B)·Σ_b R_{i,b}. Two problems that fixes: the slots are 6, 4, 6,
+ *         4 and 4 hours long, so a flat mean over-weighted the two long
+ *         low-risk slots; and a mean of per-km rates ignores section length,
+ *         which matters for the short final section. Expected crashes per day
+ *         handles both, and is what "equal cumulative risk" should mean —
+ *         each UAV responsible for the same number of crashes per day.
  *
  * Both return arrays of { index, A, B, length } in METERS along the
  * corridor — same units the detection sim uses. Risk-aware segments
@@ -55,8 +63,9 @@ export function buildUniformSegments(corridorLengthM, M) {
  *
  *   sections     — output of buildSections(road.lengthKm) [{ index, sStart, sEnd, ... }]
  *                  sStart / sEnd are in km.
- *   riskMatrix   — output of computeRiskMatrix(sectionScores) — each row
- *                  has an R array of length B (one entry per time slot).
+ *   riskMatrix   — output of buildRiskMatrix(road) — each row has a
+ *                  `lambdaDay` array of length B holding the section's
+ *                  expected crashes per day in each time slot.
  *   M            — total number of drones to deploy on this road.
  *
  * Two-stage allocation:
@@ -72,7 +81,11 @@ export function buildUniformSegments(corridorLengthM, M) {
  *
  * Returns segments with the same shape as buildUniformSegments() plus
  *   { sectionStart, sectionEnd, riskTotal, riskAverage, droneCount }
- * where sectionStart/sectionEnd are inclusive 1-based section indices.
+ * where sectionStart/sectionEnd are inclusive 1-based section indices, and
+ * riskTotal / riskAverage are in EXPECTED CRASHES PER DAY — per segment and
+ * per section respectively. They were unitless scores before this model; a
+ * segment's riskTotal is now readable directly as "this UAV covers 0.09
+ * crashes a day".
  */
 export function buildRiskAwareSegments(sections, riskMatrix, M) {
   if (!Array.isArray(sections) || sections.length === 0) {
@@ -85,10 +98,10 @@ export function buildRiskAwareSegments(sections, riskMatrix, M) {
   // Cap base segments so each gets at least one section.
   const effectiveM = Math.min(M, sections.length)
 
-  // R_i — average over time slots for each section.
+  // R_i — expected crashes per day in each section, over all time slots.
   const meanRisks = riskMatrix.map((row) => {
-    if (!Array.isArray(row.R) || row.R.length === 0) return 0
-    return row.R.reduce((a, b) => a + b, 0) / row.R.length
+    if (!Array.isArray(row.lambdaDay) || row.lambdaDay.length === 0) return 0
+    return row.lambdaDay.reduce((a, b) => a + b, 0)
   })
   const totalRisk = meanRisks.reduce((a, b) => a + b, 0)
   const target = totalRisk / effectiveM

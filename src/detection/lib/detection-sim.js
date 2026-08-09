@@ -37,6 +37,9 @@ export {
 import {
   buildRoadPath,
   positionAt,
+  // Re-exported above, but `export ... from` does not bind locally: without
+  // this import the call in droneLatLon() throws a ReferenceError.
+  unprojectMeters,
 } from '../../lib/geometry'
 
 // ---------------------------------------------------------------------------
@@ -44,14 +47,10 @@ import {
 // ---------------------------------------------------------------------------
 
 import {
-  defaultSectionScores,
-  computeRiskMatrix,
-  dailyAccidentRate,
+  buildRiskMatrix,
 } from '../../partitioning/lib/risk-scoring'
 
 import {
-  computeSlotProbabilities,
-  computeSectionTimeSlotRates,
   generateAccidentsForDay,
 } from '../../partitioning/lib/accident-generator'
 
@@ -198,14 +197,18 @@ export const DEFAULT_PARAMS = {
                                  // Ignored when forceTimeSlot is set.
 
   // Time-of-day regime selector.
-  //   null  → "Auto" — accident rates follow the natural per-slot
-  //           weighting across the trial window (existing behaviour).
-  //   1..5  → Force every accident in the trial to be drawn from the
-  //           chosen slot's risk distribution P(i|b), with the daily
-  //           total scaled by B=5 so the total events/day still matches
-  //           the corridor's real rate. Use this to study a single
+  //   null  → "Auto" — each slot generates accidents at its own fitted
+  //           rate across the trial window.
+  //   1..5  → Run the whole day under the chosen slot's regime: its hourly
+  //           rate is applied for all 24 hours. Use this to study a single
   //           time-of-day regime (e.g. "30 days where every hour is
   //           morning rush") without averaging slot effects together.
+  //
+  //           Since the fitted rates differ by slot, this now changes how
+  //           MANY accidents occur, not only where. A forced morning rush
+  //           generates roughly 1.5x the accidents of a forced night. Under
+  //           the previous manual scoring every slot produced the same daily
+  //           count, so this selector only moved them around.
   forceTimeSlot: null,
 }
 
@@ -214,22 +217,24 @@ export const DEFAULT_PARAMS = {
 // ---------------------------------------------------------------------------
 
 /**
- * Build (or rebuild) the per-road risk + rate model used to generate
- * accidents. Each entry contains:
- *   { road, scores, riskMatrix, slotProbs, rateMatrix }
- * The road is keyed by id; results are cached for the lifetime of the
- * module since the input (road object) is immutable in practice.
+ * Build (or rebuild) the per-road risk model used to generate accidents.
+ * Each entry contains:
+ *   { sections, riskMatrix }
+ * where riskMatrix rows carry the fitted per-slot rates and the expected
+ * crashes per day (`lambdaDay`) the generator samples from.
+ *
+ * The road is keyed by id; results are cached for the lifetime of the module
+ * since the input (road object) is immutable in practice. The cache key is
+ * the corridor length rather than the annual accident count, because the
+ * accident count no longer feeds this model — the fitted rate table does.
  */
 const _roadModelCache = new Map()
 function getRoadRiskModel(road) {
   const cached = _roadModelCache.get(road.id)
-  if (cached && cached._sig === road.accidents) return cached
+  if (cached && cached._sig === road.lengthKm) return cached
   const sections = buildSections(road.lengthKm)
-  const scores = defaultSectionScores(road)
-  const riskMatrix = computeRiskMatrix(scores)
-  const slotProbs = computeSlotProbabilities(riskMatrix)
-  const rateMatrix = computeSectionTimeSlotRates(dailyAccidentRate(road.accidents), slotProbs)
-  const model = { sections, scores, riskMatrix, slotProbs, rateMatrix, _sig: road.accidents }
+  const riskMatrix = buildRiskMatrix(road)
+  const model = { sections, riskMatrix, _sig: road.lengthKm }
   _roadModelCache.set(road.id, model)
   return model
 }
@@ -239,8 +244,10 @@ function getRoadRiskModel(road) {
  * Poisson model at REAL-WORLD rates (no stress multiplier).
  *
  * For each road in `roadStates`:
- *   1. Look up its cached risk + rate model (λ_{i,b}/day already encodes
- *      accidents/365 × P(i|b), per §4 of the report).
+ *   1. Look up its cached risk model. λ_{i,b}/day is the fitted crash rate
+ *      for the section's region in slot b, times section length, times the
+ *      slot's hours — an absolute expected count, not a share of a corridor
+ *      total, so nothing is renormalised after it.
  *   2. Sample Poisson events for each day that intersects the trial window
  *      [simStartHour, simStartHour + totalTime/3600). With trial windows
  *      now defaulting to multiple days, real-world rates yield enough
@@ -266,7 +273,7 @@ function generateAccidentSchedule(roadStates, params, rng) {
     const rs = roadStates[r]
     const model = getRoadRiskModel(rs.road)
     for (let d = startDay; d <= endDay; d++) {
-      const dayEvents = generateAccidentsForDay(model.rateMatrix, d, rng, forceTimeSlot)
+      const dayEvents = generateAccidentsForDay(model.riskMatrix, d, rng, forceTimeSlot)
       for (const e of dayEvents) {
         const globalHour = d * 24 + e.tau
         if (globalHour < startHour || globalHour >= endHour) continue

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { simulateDetailedLog, DEFAULT_PARAMS } from '../lib/detection-sim'
 import { POLICIES } from '../lib/policies'
+import { ANNUAL_CRASHES } from '../../partitioning/lib/risk-scoring'
 
 const EXPORT_N = 10
 const EXPORT_SEED = 42
-// 7 simulated days at the corridor's real ~200 accidents/yr yields ~4
+// 7 simulated days at the corridor's measured 446 accidents/yr yields ~9
 // expected events — enough to show the log structure without bloating
 // the droneLog (sampleInterval=60s × 7 days × 10 drones ≈ 100K rows).
 const EXPORT_DAYS = 7
@@ -86,7 +87,7 @@ export default function SimExport({ params }) {
           Simulation log export
         </div>
         <div className="text-[11px] text-[var(--color-txt3)] leading-relaxed mb-4">
-          One deterministic trial — N = {EXPORT_N}, seed = {EXPORT_SEED}, {EXPORT_DAYS} simulated days at the corridor's real ~200 accidents/yr.
+          One deterministic trial — N = {EXPORT_N}, seed = {EXPORT_SEED}, {EXPORT_DAYS} simulated days at the corridor's measured {ANNUAL_CRASHES} accidents/yr.
           Download the accident event log and per-drone state log as CSV or JSON.
         </div>
 

@@ -1,0 +1,120 @@
+{
+  "provenance": {
+    "generated": "2026-08-09",
+    "source": "M51 corridor crash-frequency panel, 2016-01 to 2018-07",
+    "panelFile": "panel/examples/m51_panel.csv",
+    "cells": 1085,
+    "observedCrashes": 1152,
+    "formula": "n_crashes ~ ln_curv + ln_ramps + ln_RAF + ln_V + ln_S85 + sin_m + cos_m",
+    "family": "poisson",
+    "dispersion": 1.1275,
+    "coefficients": {
+      "Intercept": -21.923,
+      "ln_curv": 0.22458,
+      "ln_ramps": -0.36084,
+      "ln_RAF": 1.34422,
+      "ln_V": 0.38834,
+      "ln_S85": 3.01013,
+      "sin_m": -0.108,
+      "cos_m": -0.12547
+    },
+    "units": "crashes per km per hour",
+    "note": "Rates are annual means: fitted cell predictions summed over all 31 months and divided by exposure (km x hours), which averages out the seasonal harmonic. Region boundaries are carried across unchanged: the simulator runs on the same 28.6002 km measured chainage the model was fitted on, so no rescaling is applied (factor 1.0000). The ramp coefficient fits negative on this corridor; it is folded into these rates rather than exposed as a standalone factor."
+  },
+  "corridorLengthKm": 28.6002,
+  "annualCrashes": 445.9,
+  "observedAnnualCrashes": 445.9,
+  "slotHours": {
+    "1": 6,
+    "2": 4,
+    "3": 6,
+    "4": 4,
+    "5": 4
+  },
+  "regions": [
+    {
+      "region": "Khalde",
+      "kmStart": 0.0,
+      "kmEnd": 6.306,
+      "ratePerKmHour": {
+        "3": 0.00371766,
+        "4": 0.00363136,
+        "5": 0.00337857,
+        "2": 0.00353571,
+        "1": 0.00241243
+      }
+    },
+    {
+      "region": "Naameh",
+      "kmStart": 6.306,
+      "kmEnd": 8.786,
+      "ratePerKmHour": {
+        "3": 0.00240791,
+        "4": 0.0023124,
+        "5": 0.00214961,
+        "2": 0.00222692,
+        "1": 0.001683
+      }
+    },
+    {
+      "region": "Damour",
+      "kmStart": 8.786,
+      "kmEnd": 11.969,
+      "ratePerKmHour": {
+        "3": 0.00319684,
+        "4": 0.00328885,
+        "5": 0.0028462,
+        "2": 0.00309765,
+        "1": 0.0019511
+      }
+    },
+    {
+      "region": "Jiyeh",
+      "kmStart": 11.969,
+      "kmEnd": 17.004,
+      "ratePerKmHour": {
+        "3": 0.00155948,
+        "4": 0.00153187,
+        "5": 0.00125431,
+        "2": 0.00151395,
+        "1": 0.00081549
+      }
+    },
+    {
+      "region": "Saadiyat",
+      "kmStart": 17.004,
+      "kmEnd": 19.982,
+      "ratePerKmHour": {
+        "3": 0.00141097,
+        "4": 0.00136558,
+        "5": 0.00108413,
+        "2": 0.0013641,
+        "1": 0.00082731
+      }
+    },
+    {
+      "region": "Jadra",
+      "kmStart": 19.982,
+      "kmEnd": 23.082,
+      "ratePerKmHour": {
+        "3": 0.00061323,
+        "4": 0.00057903,
+        "5": 0.00049132,
+        "2": 0.00060942,
+        "1": 0.00036571
+      }
+    },
+    {
+      "region": "Rmeileh",
+      "kmStart": 23.082,
+      "kmEnd": 28.6002,
+      "ratePerKmHour": {
+        "3": 0.00091073,
+        "4": 0.00086377,
+        "5": 0.00063609,
+        "2": 0.00086908,
+        "1": 0.00046344
+      }
+    }
+  ]
+}

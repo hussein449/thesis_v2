@@ -21,9 +21,9 @@ const DEFAULT_CONFIG = {
   droneCountsText: '1, 2, 3, 5, 7, 10, 13, 16, 20',
   trialsPerPoint: 20,
   params: {
-    // 30 days at the M51's real ~200 accidents/yr → ~16 events per trial.
-    // No accidentRateMultiplier — events are generated at the historical
-    // corridor rate (§2 of the model report).
+    // 30 days at the M51's measured 446 accidents/yr → ~37 events per trial,
+    // up from ~16 under the old assumed 200/yr. No accidentRateMultiplier —
+    // events come from the fitted per-region, per-slot rates.
     totalTime: 2592000,        // s — 30 days
     enableOperational: true,
   },

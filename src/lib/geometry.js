@@ -36,9 +36,27 @@ export function unprojectMeters(x, y, refLat, refLon) {
 }
 
 /**
- * Build a parametric path over a road polyline. Returns:
- *   - segments:     per-segment metadata (start arc length, end arc length, ...)
- *   - totalLength:  total road length in meters
+ * Build a parametric path over a road polyline.
+ *
+ * CHAINAGE vs POLYLINE. These are two different lengths and the difference
+ * is not rounding error:
+ *
+ *   - `road.lengthKm` is the corridor's MEASURED centreline length, the same
+ *     chainage the crash panel, region boundaries and risk table are built on.
+ *     For the M51 that is 28.6002 km.
+ *   - The display polyline is a 13-vertex simplification. Its arc length is
+ *     27.87 km, because straight chords cut the corners the real road follows.
+ *
+ * Everything upstream — sections, patrol segments, accident positions, drone
+ * positions — speaks chainage. So `totalLength` reports the CHAINAGE length
+ * and `positionAt()` maps chainage onto the polyline by fraction. Callers pass
+ * corridor metres throughout and never have to know the drawing is shorter.
+ *
+ * Returns:
+ *   - segments:        per-segment metadata (arc lengths in POLYLINE meters)
+ *   - totalLength:     corridor length in meters (chainage) — what callers use
+ *   - polylineLength:  arc length of the drawn polyline, in meters
+ *   - scale:           polylineLength / totalLength
  *   - refLat / refLon: projection anchor (first polyline vertex)
  */
 export function buildRoadPath(road) {
@@ -64,16 +82,35 @@ export function buildRoadPath(road) {
     acc += len
   }
 
-  return { segments, totalLength: acc, refLat, refLon }
+  // Fall back to the polyline's own length for roads that declare no measured
+  // length; scale is then 1 and this behaves exactly as it did before.
+  const totalLength = road.lengthKm > 0 ? road.lengthKm * 1000 : acc
+
+  return {
+    segments,
+    totalLength,
+    polylineLength: acc,
+    scale: acc / totalLength,
+    refLat,
+    refLon,
+  }
 }
 
-/** Position (in local meters) at arc length `s` along the path. */
+/**
+ * Position (in local meters) at chainage `s` — metres along the corridor,
+ * measured on `road.lengthKm`, not on the drawn polyline.
+ *
+ * Without the scale step, chainage past the polyline's shorter arc length
+ * would clamp to the final vertex: on the M51 every accident in the last
+ * 734 m would be drawn stacked on the Awali bridge.
+ */
 export function positionAt(path, s) {
   if (s <= 0) return path.segments[0].p1
   if (s >= path.totalLength) return path.segments[path.segments.length - 1].p2
+  const sPoly = s * path.scale
   for (const seg of path.segments) {
-    if (s <= seg.end) {
-      const t = (s - seg.start) / seg.length
+    if (sPoly <= seg.end) {
+      const t = (sPoly - seg.start) / seg.length
       return [
         seg.p1[0] + t * (seg.p2[0] - seg.p1[0]),
         seg.p1[1] + t * (seg.p2[1] - seg.p1[1]),
