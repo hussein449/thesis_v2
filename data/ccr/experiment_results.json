@@ -1,0 +1,51 @@
+{
+  "generated": "2026-11-15",
+  "source": "sandbox/ccr/experiment.js runCell(), driven from the dev server",
+  "protocol": {
+    "seeds": "reporting, base 42 (disjoint from the Stage C development seeds)",
+    "trialLength_days": 30,
+    "identicalAccidents": "all three strategies share each (M, trial) accident schedule",
+    "frozen": { "gamma": 1.0, "epsilon": 0.05, "tMax": 600 },
+    "rates": "sandbox/ccr/risk-table-corrected.json (leakage-corrected refit)",
+    "A3": "Stage B (exact DP). Stage C refinement reported separately.",
+    "percentileConvention": "null means the quantile falls among missed events"
+  },
+  "columns": ["strategy","M","trials","events","J","missPct","meanAmongDetected","meanTruncated","p90","p95","under120Pct","epsilonOk"],
+  "rows": [
+    ["A1",3,20,744,780.2,55.78,250.8,445.6,null,null,12.37,false],
+    ["A2",3,20,744,673.9,44.49,252.3,407.0,null,null,18.68,false],
+    ["A3",3,null,null,null,null,null,null,null,null,null,"INFEASIBLE"],
+
+    ["A1",5,20,781,511.9,28.55,236.9,340.6,null,null,22.15,false],
+    ["A2",5,20,781,413.7,19.97,217.5,293.9,null,null,28.43,false],
+    ["A3",5,null,null,null,null,null,null,null,null,null,"INFEASIBLE"],
+
+    ["A1",7,20,742,324.1,9.43,232.8,267.4,591.8,null,30.86,false],
+    ["A2",7,20,742,324.4,14.69,173.6,236.2,null,null,40.43,false],
+    ["A3",7,null,null,null,null,null,null,null,null,null,"INFEASIBLE"],
+
+    ["A1",10,20,716,180.7,0.14,179.2,179.8,397.5,454.2,41.62,true],
+    ["A2",10,20,716,185.1,5.03,131.4,155.0,382.7,null,53.91,false],
+    ["A3",10,null,null,null,null,null,null,null,null,null,"INFEASIBLE"],
+
+    ["A1",12,20,740,134.6,0.0,134.6,134.6,324.0,365.8,54.32,true],
+    ["A2",12,20,740,208.6,8.78,113.1,155.9,531.2,null,59.05,false],
+    ["A3",12,20,740,144.7,0.0,144.7,144.7,325.1,388.0,50.00,true],
+
+    ["A1",13,14,518,127.0,0.0,127.0,127.0,304.5,343.3,53.09,true],
+    ["A2",13,14,518,181.4,8.30,89.1,131.5,495.2,null,68.15,false],
+    ["A3",13,14,518,119.5,0.0,119.5,119.5,279.8,312.9,55.21,true],
+
+    ["A1",16,20,747,87.5,0.0,87.5,87.5,217.6,261.3,71.89,true],
+    ["A2",16,20,747,151.6,7.23,69.9,108.2,363.7,null,76.71,false],
+    ["A3",16,20,747,81.2,0.0,81.2,81.2,215.2,250.2,71.08,true],
+
+    ["A1",20,14,536,62.1,0.0,62.1,62.1,169.2,208.3,80.22,true],
+    ["A2",20,14,536,63.6,0.37,59.4,61.4,167.6,243.8,83.77,true],
+    ["A3",20,14,536,58.8,0.0,58.8,58.8,166.9,201.1,82.84,true],
+
+    ["A1",25,10,371,40.7,0.0,40.7,40.7,118.6,141.5,90.03,true],
+    ["A2",25,10,371,46.4,0.0,46.4,46.4,122.8,161.1,89.22,true],
+    ["A3",25,10,371,36.4,0.0,36.4,36.4,102.3,129.4,93.53,true]
+  ]
+}
