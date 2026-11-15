@@ -48,7 +48,7 @@ const FIELD_DESCRIPTIONS = {
   time_s: 'Simulation timestamp of this sample (seconds)',
   uav_id: 'Drone identifier — format <road_shortName>-<index>',
   battery_pct: 'Battery level at sample time (%)',
-  state: '"patrolling" | "returning" (to dock) | "docked" (charging)',
+  state: '"patrolling" | "toDock" | "swapping" (battery swap) | "fromDock"',
   arc_length_m: 'Position along the road polyline (metres from start)',
 }
 
@@ -246,7 +246,7 @@ export default function SimExport({ params }) {
                   <tr key={i} className="border-b border-[var(--color-border2)]/40">
                     {Object.values(row).map((v, j) => (
                       <td key={j} className={`px-2 py-1 whitespace-nowrap
-                        ${v === 'docked' ? 'text-amber-700' : v === 'returning' ? 'text-orange-700' : 'text-[var(--color-txt2)]'}`}>
+                        ${v === 'swapping' ? 'text-amber-700' : (v === 'toDock' || v === 'fromDock') ? 'text-orange-700' : 'text-[var(--color-txt2)]'}`}>
                         {String(v)}
                       </td>
                     ))}

@@ -6,6 +6,8 @@ import {
   unprojectMeters,
   DEFAULT_PARAMS,
   makeRng,
+  buildDockStations,
+  stepBattery,
 } from '../lib/detection-sim'
 import { POLICIES } from '../lib/policies'
 import { BEIRUT_CENTER, BEIRUT_ZOOM, computeRiskScore } from '../../partitioning/lib/roads'
@@ -228,6 +230,7 @@ function drawPatrolSegments(map, rs) {
 function makeRoadState(allocation, params, rng, patrolMode) {
   return allocation.map(({ road, drones: nDrones }) => {
     const path = buildRoadPath(road)
+    const docks = buildDockStations(path.totalLength, params)
     // Fitted section-time-slot rate model for this road.
     const sections = buildSections(road.lengthKm)
     const riskMatrix = buildRiskMatrix(road)
@@ -274,6 +277,7 @@ function makeRoadState(allocation, params, rng, patrolMode) {
           patrolIdx: seg.index,
           stackIdx: i,
           drainFactor: segDrainFactor * drainJitter,
+          docks,
           battery: initialBattery,
           state: 'patrolling',
           phaseEnd: 0,
@@ -296,14 +300,14 @@ const ROTOR_POS = [[7, 7], [25, 7], [7, 25], [25, 25]]
 function droneIcon(color, state, headingDeg = 0) {
   const stateColor =
     state === 'patrolling' ? color
-    : state === 'returning' ? '#B45309'
+    : (state === 'toDock' || state === 'fromDock') ? '#B45309'
     : '#94a3b8'
   // Faster spin while patrolling, slow drift when returning, very slow when docked
   const rotorDur =
     state === 'patrolling' ? '0.10s'
-    : state === 'returning' ? '0.22s'
+    : (state === 'toDock' || state === 'fromDock') ? '0.22s'
     : '1.2s'
-  const bodyOpacity = state === 'docked' ? 0.55 : 1
+  const bodyOpacity = state === 'swapping' ? 0.55 : 1
 
   const rotors = ROTOR_POS.map(([cx, cy]) => `
     <g transform="translate(${cx} ${cy})" opacity="${bodyOpacity}">
@@ -663,22 +667,10 @@ export default function LiveMap({ N, policyKey, params: paramsProp }) {
             d.s += d.dir * st.params.droneSpeed * dt
             if (d.s >= d.segEnd) { d.s = d.segEnd; d.dir = -1 }
             if (d.s <= d.segStart) { d.s = d.segStart; d.dir = 1 }
-            d.battery -= st.params.batteryDrainRate * d.drainFactor * dt
-            if (d.battery <= st.params.lowBatteryThreshold) {
-              d.state = 'returning'
-              d.phaseEnd = st.simT + st.params.dockTransitTime
-            }
-          } else if (d.state === 'returning') {
-            if (st.simT >= d.phaseEnd) {
-              d.state = 'docked'
-              d.phaseEnd = st.simT + st.params.dockChargeTime
-            }
-          } else if (d.state === 'docked') {
-            d.battery = Math.min(100, d.battery + st.params.chargeRate * dt)
-            if (d.battery >= st.params.readyThreshold && st.simT >= d.phaseEnd) {
-              d.state = 'patrolling'
-            }
           }
+          // Shared battery / dock-swap state machine, driven at the live
+          // map's wall-clock timestep.
+          stepBattery(d, st.params, st.simT, dt)
         }
       }
 

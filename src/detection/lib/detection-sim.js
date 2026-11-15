@@ -158,15 +158,31 @@ export const DEFAULT_PARAMS = {
   //         longer cycle also reduces reserve-pool churn and matches
   //         the ground-truth surveillance UAV duty-cycle.
   enableOperational: true,
-  batteryDrainRate: 2 / 60,       // %/s while patrolling  (= 2 %/min)
-  // [DESIGN] return-to-dock and ready-to-deploy thresholds. 25 % gives a
-  //         comfortable margin to ferry back to the dock without forcing an
-  //         emergency landing; 80 % avoids redeploying a barely-charged drone.
+  batteryDrainRate: 2 / 60,       // %/s in flight  (= 2 %/min), unchanged
+
+  // [DESIGN] Return-to-dock threshold. 25 % is the nominal trigger, but the
+  //         effective trigger is whichever is HIGHER: this value, or the
+  //         charge actually needed to reach the nearest dock plus
+  //         `batterySafetyMargin`. A drone far from a dock therefore leaves
+  //         earlier, and no drone is ever scheduled to arrive empty.
   lowBatteryThreshold: 25,
-  readyThreshold: 80,
-  dockTransitTime: 60,           // [DESIGN] s — ferry time
-  dockChargeTime: 240,           // [DESIGN] s — minimum charge before redeploy
-  chargeRate: 100 / 240,         // [SPEC]   %/s — DJI Mavic 3 fast-charge
+  batterySafetyMargin: 5,        // [DESIGN] % still in the pack on arrival
+
+  // Docking stations are placed ALONG the corridor, so the ferry distance a
+  // drone pays depends on where it actually is. `dockCount` stations are
+  // spaced evenly at (i + 0.5) * L / n, which minimises the worst-case
+  // distance to a dock (L / 2n). Override with explicit `dockPositionsM`.
+  dockCount: 5,                  // [DESIGN] → max 2.86 km to a dock on M51
+  dockPositionsM: null,          // explicit positions in metres, or null
+
+  // [DESIGN] Batteries are SWAPPED at the station, not charged in place: the
+  //         drone lands, a charged pack is fitted, it leaves at 100 %. The
+  //         dwell is therefore a fixed handling time that does not depend on
+  //         the state of charge — which is what makes it physically
+  //         meaningful. The previous model charged 0→100 % in 240 s
+  //         (~25 %/min), far beyond any real fast-charger, and gated redeploy
+  //         on BOTH 80 % and a 240 s floor, so the 80 % rule never bound.
+  dockSwapTime: 120,             // s — land, swap pack, take off
 
   // Dispatch rule: nearest drone on the same road that is currently in
   // 'patrolling' state. If none, the accident remains active and accumulates
@@ -314,6 +330,115 @@ export function baselineRoadRate(road) {
  * Returns a result object with detection times, availability history, and
  * counts of detected/missed accidents.
  */
+// ---------------------------------------------------------------------------
+// Docking stations and the battery-swap state machine
+// ---------------------------------------------------------------------------
+
+/**
+ * Dock positions in metres along the corridor.
+ *
+ * Evenly spaced at (i + 0.5) * L / n, which is the placement that minimises
+ * the worst-case distance from any point of the corridor to a dock: L / 2n.
+ * With the M51 at 28.6 km and n = 5 that is 2.86 km, about 6 min of flight
+ * and 12 % of a pack at the default drain rate.
+ */
+export function buildDockStations(corridorLengthM, P = DEFAULT_PARAMS) {
+  if (Array.isArray(P.dockPositionsM) && P.dockPositionsM.length) {
+    return [...P.dockPositionsM].sort((a, b) => a - b)
+  }
+  const n = Math.max(1, Math.round(P.dockCount ?? 1))
+  return Array.from({ length: n }, (_, i) => ((i + 0.5) * corridorLengthM) / n)
+}
+
+/** Nearest dock to position `s`, as { pos, dist } in metres. */
+export function nearestDock(docks, s) {
+  let pos = docks[0]
+  let dist = Math.abs(s - docks[0])
+  for (let i = 1; i < docks.length; i++) {
+    const dd = Math.abs(s - docks[i])
+    if (dd < dist) { dist = dd; pos = docks[i] }
+  }
+  return { pos, dist }
+}
+
+/**
+ * Advance one drone's battery/docking state by `dt`.
+ *
+ * States:
+ *   patrolling → toDock → swapping → fromDock → patrolling
+ *
+ * Battery drains at the same rate in every flying state (patrolling, toDock,
+ * fromDock) and not at all while the drone is on the ground swapping. The
+ * ferry distance is the real distance to the nearest dock, and the drone
+ * rejoins its segment at the point closest to that dock.
+ *
+ * Returns true when the drone is patrolling its segment (i.e. providing
+ * coverage) after this step.
+ */
+export function stepBattery(d, P, t, dtOverride) {
+  if (!P.enableOperational) return d.state === 'patrolling'
+  const docks = d.docks ?? [d.segStart]
+  // `dtOverride` lets the live map drive this with its wall-clock timestep.
+  const dt = dtOverride ?? P.dt
+  const drain = P.batteryDrainRate * (d.drainFactor ?? 1) * dt
+
+  if (d.state === 'patrolling') {
+    d.battery = Math.max(0, d.battery - drain)
+    const { pos, dist } = nearestDock(docks, d.s)
+    // Charge needed to fly to that dock, plus the margin we insist on having
+    // left in the pack on arrival.
+    const needed = (dist / P.droneSpeed) * P.batteryDrainRate
+      + (P.batterySafetyMargin ?? 0)
+    if (d.battery <= Math.max(P.lowBatteryThreshold, needed)) {
+      d.state = 'toDock'
+      d.dockPos = pos
+      d.flyFrom = d.s
+      // Rejoin the segment at whichever end is closest to the dock.
+      d.rejoin = Math.min(Math.max(pos, d.segStart), d.segEnd)
+      d.phaseEnd = t + dist / P.droneSpeed
+      if (d.battery < needed - (P.batterySafetyMargin ?? 0)) d.stranded = true
+    }
+    return true
+  }
+
+  if (d.state === 'toDock') {
+    d.battery = Math.max(0, d.battery - drain)
+    d.s += Math.sign(d.dockPos - d.s)
+      * Math.min(P.droneSpeed * dt, Math.abs(d.dockPos - d.s))
+    if (t >= d.phaseEnd) {
+      d.s = d.dockPos
+      d.state = 'swapping'
+      d.phaseEnd = t + P.dockSwapTime
+      d.swaps = (d.swaps ?? 0) + 1
+    }
+    return false
+  }
+
+  if (d.state === 'swapping') {
+    // On the ground, powered down — no drain.
+    if (t >= d.phaseEnd) {
+      d.battery = 100                     // fresh pack
+      d.state = 'fromDock'
+      d.phaseEnd = t + Math.abs(d.rejoin - d.s) / P.droneSpeed
+    }
+    return false
+  }
+
+  if (d.state === 'fromDock') {
+    d.battery = Math.max(0, d.battery - drain)
+    d.s += Math.sign(d.rejoin - d.s)
+      * Math.min(P.droneSpeed * dt, Math.abs(d.rejoin - d.s))
+    if (t >= d.phaseEnd) {
+      d.s = d.rejoin
+      d.dir = d.rejoin <= d.segStart ? 1 : -1
+      d.state = 'patrolling'
+    }
+    return false
+  }
+
+  return false
+}
+
 export function simulateOnce({ allocation, params, seed }) {
   const P = { ...DEFAULT_PARAMS, ...params }
   const rng = makeRng(seed)
@@ -331,6 +456,7 @@ export function simulateOnce({ allocation, params, seed }) {
   // patrol segment [A_m, B_m] in meters along the corridor.
   const roadStates = allocation.map(({ road, drones: nDrones }) => {
     const path = buildRoadPath(road)
+    const docks = buildDockStations(path.totalLength, P)
     const model = getRoadRiskModel(road)
     const segments = nDrones > 0
       ? buildPatrolSegments({
@@ -370,7 +496,8 @@ export function simulateOnce({ allocation, params, seed }) {
           patrolIdx: seg.index,          // segment index — shared by stack
           stackIdx: i,                   // 0..k-1 within the stack
           battery,
-          state: 'patrolling',           // patrolling | returning | docked
+          state: 'patrolling',  // patrolling|toDock|swapping|fromDock
+          docks,
           phaseEnd: 0,
         })
       }
@@ -431,56 +558,48 @@ export function simulateOnce({ allocation, params, seed }) {
             d.dir = 1
           }
 
-          // Battery drain
-          if (P.enableOperational) {
-            d.battery -= P.batteryDrainRate * P.dt
-            if (d.battery <= P.lowBatteryThreshold) {
-              d.state = 'returning'
-              d.phaseEnd = t + P.dockTransitTime
-
-              // Dispatch a reserve ONLY if this segment is now under-
-              // covered relative to its allocated count. For un-stacked
-              // segments (droneCount=1) this fires whenever the lone
-              // drone leaves — same as the legacy behaviour. For stacked
-              // segments (droneCount>1) this preserves "always have N
-              // drones in hot spots" without wasting reserves when the
-              // segment still has redundancy.
-              const seg = rs.segments.find((s) => s.index === d.patrolIdx)
-              const allocated = seg?.droneCount ?? 1
-              const stillPatrolling = rs.droneStates.filter(
-                (x) => x.patrolIdx === d.patrolIdx && x.state === 'patrolling'
-              ).length
-              const coveringReserves = reserves.filter(
-                (rv) => rv.state === 'covering' && rv.target
-                  && rv.target.patrolIdx === d.patrolIdx
-              ).length
-              const enrouteReserves = reserves.filter(
-                (rv) => rv.state === 'enroute' && rv.target
-                  && rv.target.patrolIdx === d.patrolIdx
-              ).length
-              const effectiveCount = stillPatrolling + coveringReserves + enrouteReserves
-              if (effectiveCount < allocated) {
-                const r = reserves.find((x) => x.state === 'idle')
-                if (r) {
-                  r.state = 'enroute'
-                  r.readyAt = t + P.reserveDispatchDelay
-                  r.target = d
-                }
+          // Battery / docking — see stepBattery(). The drone flies to its
+          // NEAREST dock, draining normally on the way, swaps the pack, and
+          // flies back to the end of its segment closest to that dock.
+          const covering = stepBattery(d, P, t)
+          if (d.state !== 'patrolling') {
+            // Just left the segment: dispatch a reserve ONLY if this segment
+            // is now under-covered relative to its allocated count. For
+            // un-stacked segments (droneCount=1) this fires whenever the lone
+            // drone leaves — same as the legacy behaviour. For stacked
+            // segments (droneCount>1) this preserves "always have N drones in
+            // hot spots" without wasting reserves when the segment still has
+            // redundancy.
+            const seg = rs.segments.find((s) => s.index === d.patrolIdx)
+            const allocated = seg?.droneCount ?? 1
+            const stillPatrolling = rs.droneStates.filter(
+              (x) => x.patrolIdx === d.patrolIdx && x.state === 'patrolling'
+            ).length
+            const coveringReserves = reserves.filter(
+              (rv) => rv.state === 'covering' && rv.target
+                && rv.target.patrolIdx === d.patrolIdx
+            ).length
+            const enrouteReserves = reserves.filter(
+              (rv) => rv.state === 'enroute' && rv.target
+                && rv.target.patrolIdx === d.patrolIdx
+            ).length
+            const effectiveCount = stillPatrolling + coveringReserves + enrouteReserves
+            if (effectiveCount < allocated && !d.reserveSent) {
+              const r = reserves.find((x) => x.state === 'idle')
+              if (r) {
+                r.state = 'enroute'
+                r.readyAt = t + P.reserveDispatchDelay
+                r.target = d
+                d.reserveSent = true
               }
             }
+          } else {
+            d.reserveSent = false
           }
 
-          availableCount++
-        } else if (d.state === 'returning') {
-          if (t >= d.phaseEnd) {
-            d.state = 'docked'
-            d.phaseEnd = t + P.dockChargeTime
-          }
-        } else if (d.state === 'docked') {
-          d.battery = Math.min(100, d.battery + P.chargeRate * P.dt)
-          if (d.battery >= P.readyThreshold && t >= d.phaseEnd) {
-            d.state = 'patrolling'
-          }
+          if (covering) availableCount++
+        } else {
+          stepBattery(d, P, t)
         }
       }
     }
@@ -623,6 +742,7 @@ export function simulateWithDispatch({ allocation, params, seed, dispatchRule = 
 
   const roadStates = allocation.map(({ road, drones: nDrones }) => {
     const path = buildRoadPath(road)
+    const docks = buildDockStations(path.totalLength, P)
     const model = getRoadRiskModel(road)
     const segments = nDrones > 0
       ? buildPatrolSegments({
@@ -660,6 +780,7 @@ export function simulateWithDispatch({ allocation, params, seed, dispatchRule = 
           stackIdx: i,
           battery,
           state: 'patrolling',
+        docks,
           phaseEnd: 0,
           dispatches: 0,
         })
@@ -684,16 +805,9 @@ export function simulateWithDispatch({ allocation, params, seed, dispatchRule = 
           d.s += d.dir * P.droneSpeed * P.dt
           if (d.s >= d.segEnd) { d.s = d.segEnd; d.dir = -1 }
           if (d.s <= d.segStart) { d.s = d.segStart; d.dir = 1 }
-          d.battery -= P.batteryDrainRate * P.dt
-          if (d.battery <= P.lowBatteryThreshold) {
-            d.state = 'returning'; d.phaseEnd = t + P.dockTransitTime
-          }
-          availableCount++
-        } else if (d.state === 'returning') {
-          if (t >= d.phaseEnd) { d.state = 'docked'; d.phaseEnd = t + P.dockChargeTime }
-        } else if (d.state === 'docked') {
-          d.battery = Math.min(100, d.battery + P.chargeRate * P.dt)
-          if (d.battery >= P.readyThreshold && t >= d.phaseEnd) d.state = 'patrolling'
+          if (stepBattery(d, P, t)) availableCount++
+        } else {
+          stepBattery(d, P, t)
         }
       }
     }
@@ -765,6 +879,7 @@ export function simulateDetailedLog({ allocation, params, seed, sampleInterval =
 
   const roadStates = allocation.map(({ road, drones: nDrones }) => {
     const path = buildRoadPath(road)
+    const docks = buildDockStations(path.totalLength, P)
     const model = getRoadRiskModel(road)
     const segments = nDrones > 0
       ? buildPatrolSegments({
@@ -800,6 +915,7 @@ export function simulateDetailedLog({ allocation, params, seed, sampleInterval =
           stackIdx: i,
           battery,
           state: 'patrolling',
+        docks,
           phaseEnd: 0,
         })
       }
@@ -841,15 +957,9 @@ export function simulateDetailedLog({ allocation, params, seed, sampleInterval =
           d.s += d.dir * P.droneSpeed * P.dt
           if (d.s >= d.segEnd) { d.s = d.segEnd; d.dir = -1 }
           if (d.s <= d.segStart) { d.s = d.segStart; d.dir = 1 }
-          d.battery -= P.batteryDrainRate * P.dt
-          if (d.battery <= P.lowBatteryThreshold) {
-            d.state = 'returning'; d.phaseEnd = t + P.dockTransitTime
-          }
-        } else if (d.state === 'returning') {
-          if (t >= d.phaseEnd) { d.state = 'docked'; d.phaseEnd = t + P.dockChargeTime }
-        } else if (d.state === 'docked') {
-          d.battery = Math.min(100, d.battery + P.chargeRate * P.dt)
-          if (d.battery >= P.readyThreshold && t >= d.phaseEnd) d.state = 'patrolling'
+          stepBattery(d, P, t)
+        } else {
+          stepBattery(d, P, t)
         }
       }
     }
@@ -922,6 +1032,7 @@ export function simulateBatteryTrace({ allocation, params, seed, sampleInterval 
   const drones = []
   allocation.forEach(({ road, drones: nDrones }, ri) => {
     const path = buildRoadPath(road)
+    const docks = buildDockStations(path.totalLength, P)
     if (nDrones === 0) return
     const model = getRoadRiskModel(road)
     const segments = buildPatrolSegments({
@@ -959,6 +1070,7 @@ export function simulateBatteryTrace({ allocation, params, seed, sampleInterval 
           dir,
           battery,
           state: 'patrolling',
+        docks,
           phaseEnd: 0,
           samples: [],
         })
@@ -981,16 +1093,9 @@ export function simulateBatteryTrace({ allocation, params, seed, sampleInterval 
         d.s += d.dir * P.droneSpeed * P.dt
         if (d.s >= d.segEnd) { d.s = d.segEnd; d.dir = -1 }
         if (d.s <= d.segStart) { d.s = d.segStart; d.dir = 1 }
-        d.battery -= P.batteryDrainRate * P.dt
-        if (d.battery <= P.lowBatteryThreshold) {
-          d.state = 'returning'
-          d.phaseEnd = t + P.dockTransitTime
-        }
-      } else if (d.state === 'returning') {
-        if (t >= d.phaseEnd) { d.state = 'docked'; d.phaseEnd = t + P.dockChargeTime }
-      } else if (d.state === 'docked') {
-        d.battery = Math.min(100, d.battery + P.chargeRate * P.dt)
-        if (d.battery >= P.readyThreshold && t >= d.phaseEnd) d.state = 'patrolling'
+        stepBattery(d, P, t)
+      } else {
+        stepBattery(d, P, t)
       }
     }
   }
@@ -1017,6 +1122,7 @@ export function simulateDroneTrajectories({ allocation, params, seed, sampleInte
   const drones = []
   allocation.forEach(({ road, drones: nDrones }) => {
     const path = buildRoadPath(road)
+    const docks = buildDockStations(path.totalLength, P)
     if (nDrones === 0) return
     const model = getRoadRiskModel(road)
     const segments = buildPatrolSegments({
@@ -1040,6 +1146,7 @@ export function simulateDroneTrajectories({ allocation, params, seed, sampleInte
         dir: rng() < 0.5 ? 1 : -1,
         battery: 40 + (i / Math.max(nDrones - 1, 1)) * 55,
         state: 'patrolling',
+        docks,
         phaseEnd: 0,
         pathPoints: [],
       })
@@ -1062,16 +1169,9 @@ export function simulateDroneTrajectories({ allocation, params, seed, sampleInte
         d.s += d.dir * P.droneSpeed * P.dt
         if (d.s >= d.segEnd) { d.s = d.segEnd; d.dir = -1 }
         if (d.s <= d.segStart) { d.s = d.segStart; d.dir = 1 }
-        d.battery -= P.batteryDrainRate * P.dt
-        if (d.battery <= P.lowBatteryThreshold) {
-          d.state = 'returning'
-          d.phaseEnd = t + P.dockTransitTime
-        }
-      } else if (d.state === 'returning') {
-        if (t >= d.phaseEnd) { d.state = 'docked'; d.phaseEnd = t + P.dockChargeTime }
-      } else if (d.state === 'docked') {
-        d.battery = Math.min(100, d.battery + P.chargeRate * P.dt)
-        if (d.battery >= P.readyThreshold && t >= d.phaseEnd) d.state = 'patrolling'
+        stepBattery(d, P, t)
+      } else {
+        stepBattery(d, P, t)
       }
     }
   }
