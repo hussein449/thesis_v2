@@ -46,7 +46,7 @@
  * exactly why constraint (ii) has to be checked in the simulator.
  */
 
-import { rateOverSpan, SLOT_HOURS, TIME_SLOTS } from '../../src/partitioning/lib/risk-scoring'
+import { rateOverSpan, SLOT_HOURS, TIME_SLOTS } from './risk-scoring'
 
 // ---------------------------------------------------------------------------
 // Defaults — spec §2

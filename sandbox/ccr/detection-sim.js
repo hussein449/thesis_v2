@@ -48,7 +48,7 @@ import {
 
 import {
   buildRiskMatrix,
-} from '../../src/partitioning/lib/risk-scoring'
+} from './risk-scoring'
 
 import {
   generateAccidentsForDay,
