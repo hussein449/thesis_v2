@@ -6,11 +6,19 @@
  * implementation note (Nov 2025). Pure analytical model:
  *
  *   - linear battery discharge during patrol / travel
- *   - linear charging at the dock
+ *   - battery SWAP at the dock (fixed handling time, not charging)
  *   - segment-dependent thresholds B_crit,m and B_min,m
- *   - shared docking station at the corridor mid-point
+ *   - docking stations spaced along the corridor; each segment uses its
+ *     NEAREST station
  *   - reserve UAV pool of size ⌈ρM⌉
  *   - event-driven (no time-stepping), deterministic
+ *
+ * PHYSICS IS SHARED WITH detection-sim.js. The drain rate, the dock
+ * positions, the swap time and the safety margin are all taken from that
+ * module's DEFAULT_PARAMS so the two cannot drift apart. What differs is the
+ * QUESTION: this layer asks how often a segment is left uncovered over 24 h
+ * as a function of the reserve ratio, deterministically and with no
+ * accidents; detection-sim.js asks how quickly crashes are detected.
  *
  * This layer is intentionally INDEPENDENT of the accident-detection layer
  * in detection-sim.js — accidents are not modelled here, and detection
@@ -24,6 +32,11 @@ import { ROADS } from '../../partitioning/lib/roads.js'
 import { buildPatrolSegments } from '../../partitioning/lib/uav-segments.js'
 import { buildSections } from '../../partitioning/lib/sections.js'
 import { buildRiskMatrix } from '../../partitioning/lib/risk-scoring.js'
+import {
+  DEFAULT_PARAMS as SIM_PARAMS,
+  buildDockStations,
+  nearestDock,
+} from './detection-sim.js'
 
 // ---------------------------------------------------------------------------
 // Corridor metadata (M51 Khalde → Awali)
@@ -32,7 +45,10 @@ import { buildRiskMatrix } from '../../partitioning/lib/risk-scoring.js'
 const M51 = ROADS.find((r) => r.shortName?.includes('M51')) ?? ROADS[0]
 const CORRIDOR_LENGTH_KM = M51.lengthKm ?? 27.9
 const CORRIDOR_LENGTH_M = CORRIDOR_LENGTH_KM * 1000
-const DOCK_KM = CORRIDOR_LENGTH_KM / 2 // §7 — middle of corridor
+// Docking stations along the route — same placement rule and same count as
+// detection-sim.js, expressed in km for this module's units.
+const DOCK_KMS = buildDockStations(CORRIDOR_LENGTH_M, SIM_PARAMS)
+  .map((m) => m / 1000)
 
 // ---------------------------------------------------------------------------
 // Default parameters (PDF §6 & §18)
@@ -41,25 +57,30 @@ const DOCK_KM = CORRIDOR_LENGTH_KM / 2 // §7 — middle of corridor
 /**
  * All times in MINUTES, all distances in KM, all batteries in %.
  *   v        — UAV cruise speed in km/min. 8 m/s ≈ 0.48 km/min.
- *   r_fly    — discharge rate (%/min) during patrol or travel.
- *   r_charge — charging rate (%/min) at the dock.
- *   B_safety — minimum battery to keep in reserve when returning.
- *   B_ready  — battery level a charging UAV must reach to re-enter pool.
+ *   r_fly    — discharge rate (%/min) in flight, patrol or ferry alike.
+ *   B_safety — minimum battery still in the pack on arrival at a dock.
+ *   T_swap   — fixed time to land, exchange the pack and take off again.
+ *              A swap does not depend on state of charge, which is what
+ *              makes the dwell physically meaningful.
  *   T_sim    — total simulated time (min). 1440 = 24 h.
+ *
+ * v, r_fly, B_safety and T_swap mirror detection-sim.js exactly.
  */
 export const DEFAULT_PARAMS = {
-  v: (8 * 60) / 1000, // 8 m/s → 0.48 km/min
-  r_fly: 0.75,        // %/min
-  r_charge: 1.0,      // %/min
-  B_safety: 5,        // %
-  B_ready: 100,       // %
-  T_sim: 1440,        // min
+  v: (SIM_PARAMS.droneSpeed * 60) / 1000,        // m/s → km/min
+  r_fly: SIM_PARAMS.batteryDrainRate * 60,       // %/s → %/min  (= 2 %/min)
+  B_safety: SIM_PARAMS.batterySafetyMargin,      // %
+  T_swap: SIM_PARAMS.dockSwapTime / 60,          // s → min  (= 2 min)
+  T_sim: 1440,                                   // min
 }
 
 export const CORRIDOR = {
   name: M51.shortName ?? 'M51 Khalde–Awali',
   lengthKm: CORRIDOR_LENGTH_KM,
-  dockKm: DOCK_KM,
+  dockKms: DOCK_KMS,
+  dockCount: DOCK_KMS.length,
+  // Worst case any point on the corridor is from a station.
+  maxDockDistanceKm: CORRIDOR_LENGTH_KM / (2 * DOCK_KMS.length),
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +116,8 @@ export function buildBatterySegments(M, mode, params = {}) {
     const aKm = s.A / 1000
     const bKm = s.B / 1000
     const sCenterKm = (aKm + bKm) / 2
-    const dDockKm = Math.abs(sCenterKm - DOCK_KM)
+    // Distance to the NEAREST station, not to one fixed mid-corridor dock.
+    const dDockKm = nearestDock(DOCK_KMS, sCenterKm).dist
     const Ttravel = dDockKm / P.v // min
     const Bcrit = P.r_fly * Ttravel + P.B_safety
     const Bmin = Bcrit + P.r_fly * Ttravel
@@ -266,10 +288,10 @@ export function simulateBatteryDocking({ M, rho, mode = 'uniform', params = {} }
       if (st.waiting && st.uncoveredStart === null) {
         st.uncoveredStart = ev.t
       }
-      // The departing UAV reaches the dock at exactly B_safety, then charges.
+      // The departing UAV reaches the dock at exactly B_safety and swaps its
+      // pack. The dwell is fixed and independent of state of charge.
       const tDock = ev.t + seg.Ttravel
-      const Tcharge = (P.B_ready - P.B_safety) / P.r_charge
-      q.push({ t: tDock + Tcharge, type: 'ready' })
+      q.push({ t: tDock + P.T_swap, type: 'ready' })
     } else if (ev.type === 'arrival') {
       // Reserve UAV arrives at segment m.
       if (st.uncoveredStart !== null) {
@@ -280,12 +302,11 @@ export function simulateBatteryDocking({ M, rho, mode = 'uniform', params = {} }
       replacements++
 
       // On-time path: the OLD UAV is still on segment at exactly B_crit. It now
-      // departs for the dock and charges. (Overdue path: old UAV already left
+      // departs for the dock and swaps. (Overdue path: old UAV already left
       // at 'crit', so its 'ready' was already scheduled there.)
       if (ev.onTime) {
         const tDock = ev.t + seg.Ttravel
-        const Tcharge = (P.B_ready - P.B_safety) / P.r_charge
-        q.push({ t: tDock + Tcharge, type: 'ready' })
+        q.push({ t: tDock + P.T_swap, type: 'ready' })
       }
 
       // The new active UAV (the reserve) starts patrolling at full battery.

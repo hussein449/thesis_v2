@@ -268,10 +268,13 @@ export default function FleetAvailabilityPlots() {
         </div>
         <div className="text-[11px] text-[var(--color-txt3)] leading-relaxed max-w-3xl">
           <span className="text-[var(--color-txt2)] font-semibold">What this tab answers:</span>{' '}
-          given M patrol segments, one shared dock at the corridor midpoint, and a reserve
-          pool of size <span className="font-mono">⌈ρ·M⌉</span>, how often is each segment
-          left uncovered over a 24 h day? Deterministic event-based model — no accidents,
-          no Monte-Carlo noise. Far segments use{' '}
+          given M patrol segments, {CORRIDOR.dockCount} docking stations spaced along the
+          corridor, and a reserve pool of size <span className="font-mono">⌈ρ·M⌉</span>,
+          how often is each segment left uncovered over a 24 h day? Deterministic
+          event-based model — no accidents, no Monte-Carlo noise. Batteries are swapped,
+          not charged, and each segment ferries to its nearest station. Physics
+          (drain rate, dock positions, swap time) is shared with the detection
+          simulator. Far segments use{' '}
           <span className="font-mono">B<sub>crit,m</sub> = r<sub>fly</sub>·T<sub>travel,m</sub> + B<sub>safety</sub></span>
           {' '}and request replacement at{' '}
           <span className="font-mono">B<sub>min,m</sub> = B<sub>crit,m</sub> + r<sub>fly</sub>·T<sub>travel,m</sub></span>
@@ -305,12 +308,12 @@ export default function FleetAvailabilityPlots() {
         {/* PDF parameter readout */}
         <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-[9.5px] text-[var(--color-txt3)] font-mono">
           <span>L = <span className="text-[var(--color-txt2)]">{CORRIDOR.lengthKm.toFixed(1)} km</span></span>
-          <span>s<sub>dock</sub> = <span className="text-[var(--color-txt2)]">{CORRIDOR.dockKm.toFixed(2)} km</span></span>
+          <span>docks = <span className="text-[var(--color-txt2)]">{CORRIDOR.dockCount} @ {CORRIDOR.dockKms.map((d) => d.toFixed(2)).join(", ")} km</span></span>
           <span>v = <span className="text-[var(--color-txt2)]">{DEFAULT_PARAMS.v.toFixed(2)} km/min</span></span>
           <span>r<sub>fly</sub> = <span className="text-[var(--color-txt2)]">{DEFAULT_PARAMS.r_fly} %/min</span></span>
-          <span>r<sub>charge</sub> = <span className="text-[var(--color-txt2)]">{DEFAULT_PARAMS.r_charge} %/min</span></span>
+          <span>T<sub>swap</sub> = <span className="text-[var(--color-txt2)]">{DEFAULT_PARAMS.T_swap} min</span></span>
           <span>B<sub>safety</sub> = <span className="text-[var(--color-txt2)]">{DEFAULT_PARAMS.B_safety} %</span></span>
-          <span>B<sub>ready</sub> = <span className="text-[var(--color-txt2)]">{DEFAULT_PARAMS.B_ready} %</span></span>
+          <span>d<sub>max</sub> = <span className="text-[var(--color-txt2)]">{CORRIDOR.maxDockDistanceKm.toFixed(2)} km</span></span>
           <span>T<sub>sim</sub> = <span className="text-[var(--color-txt2)]">{DEFAULT_PARAMS.T_sim} min</span></span>
         </div>
       </div>
