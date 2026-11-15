@@ -1,0 +1,32 @@
+{
+  "generated": "2026-11-15",
+  "source": "sandbox/ccr/paired-test.js pairedCompare()",
+  "method": {
+    "pairing": "event level — the three strategies share each (M, seed) accident schedule, and alignment is asserted on (time, position) per event, not assumed",
+    "statistic": "u_k = min(T_k, T_max) + gamma*T_max*1{missed}; mean(u) = J",
+    "interval": "cluster bootstrap over whole trials, 10000 resamples — events within a trial share a fleet, a battery timeline and a dock queue, so resampling events would understate the interval",
+    "wilcoxon": "signed-rank on per-event differences, reported as a SECONDARY check on whether the typical event differs. It assumes independent events, which these are not, so the bootstrap interval is the primary result.",
+    "frozen": { "gamma": 1.0, "epsilon": 0.05, "tMax": 600 },
+    "selfTest": "A1 vs A1 returns exactly zero difference"
+  },
+  "results": [
+    {
+      "comparison": "A3 - A2", "M": 16, "trials": 20, "events": 747,
+      "meanDiff_s": -70.364, "ci95": [-88.126, -52.128],
+      "wilcoxonP": 0.299, "verdict": "A3 better",
+      "reading": "Large and robust. The gap is created by A2's 7.2% missed alerts, each entering at 2*T_max. The Wilcoxon is not significant because the MEDIAN event is detected quickly by both — the difference lives entirely in the tail, which is the point."
+    },
+    {
+      "comparison": "A3 - A1", "M": 16, "trials": 20, "events": 747,
+      "meanDiff_s": -6.23, "ci95": [-12.14, -0.496],
+      "wilcoxonP": 0.086, "verdict": "A3 better, weakly",
+      "reading": "The interval excludes zero but only just (-0.50 s at the upper end), and the typical event is no faster. Weak evidence. Worth more trials before the paper leans on it."
+    },
+    {
+      "comparison": "A3 - A1", "M": 12, "trials": 20, "events": 740,
+      "meanDiff_s": 10.116, "ci95": [0.123, 20.613],
+      "wilcoxonP": 0.062, "verdict": "A1 better, weakly",
+      "reading": "A3 is worse at its smallest feasible fleet, as the raw table suggested, but the interval barely excludes zero (+0.12 s at the lower end). Weak evidence, and consistent with the cap leaving almost no freedom at M = 12."
+    }
+  ]
+}
