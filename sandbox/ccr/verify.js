@@ -13,11 +13,9 @@ import {
   buildCcrGrid, cellRiskWeights, surrogateWait, maxSegmentLength,
   minimumFleet, buildCcrSegments,
 } from './ccr-uav'
-import { buildPatrolSegmentsWithExplicit as buildPatrolSegments } from './patrol-modes'
-import { simulateOnce, DEFAULT_PARAMS } from './detection-sim'
+import { DEFAULT_PARAMS } from './detection-sim'
 import { m51 } from './harness'
 import { evaluatePartition, devSeeds } from './objective'
-import { boundariesToSegments } from './stage-c'
 
 const road = () => m51()
 const L = () => road().lengthKm * 1000
