@@ -15,7 +15,8 @@ import {
 } from './ccr-uav'
 import { DEFAULT_PARAMS } from './detection-sim'
 import { m51 } from './harness'
-import { evaluatePartition, devSeeds } from './objective'
+import { evaluatePartition, devSeeds, OBJECTIVE_DEFAULTS } from './objective'
+import { FROZEN, checksumValid, computeChecksum } from './frozen-config'
 
 const road = () => m51()
 const L = () => road().lengthKm * 1000
@@ -238,6 +239,35 @@ export function t9_independence() {
     { devBase: 777000, reportingBase: 42, overlaps: overlap.length })
 }
 
+// --- T10 frozen parameters ----------------------------------------------
+
+/**
+ * gamma and epsilon must be exactly what was predeclared. Both can be moved
+ * after the fact to flatter A3, so a silent edit has to be impossible
+ * rather than merely discouraged.
+ */
+export function t10_frozenParameters() {
+  const live = computeChecksum()
+  const matches = checksumValid()
+  const wired = OBJECTIVE_DEFAULTS.gamma === FROZEN.primary.gamma
+    && OBJECTIVE_DEFAULTS.epsilon === FROZEN.primary.epsilon
+    && OBJECTIVE_DEFAULTS.tMax === FROZEN.primary.tMax
+  const grid = FROZEN.sensitivity.gamma.includes(FROZEN.primary.gamma)
+    && FROZEN.sensitivity.epsilon.includes(FROZEN.primary.epsilon)
+  const seedsDisjoint = FROZEN.devSeedBase !== FROZEN.reportingSeedBase
+  return ok('T10 frozen gamma / epsilon unchanged and actually in use',
+    matches && wired && grid && seedsDisjoint, {
+      frozenOn: FROZEN.frozenOn,
+      primary: FROZEN.primary,
+      sensitivity: FROZEN.sensitivity,
+      checksum: FROZEN.checksum,
+      recomputed: live,
+      checksumMatches: matches,
+      objectiveUsesThem: wired,
+      primaryInsideSensitivityGrid: grid,
+    })
+}
+
 // --- runner -------------------------------------------------------------------
 
 export function runAll() {
@@ -245,6 +275,7 @@ export function runAll() {
     t1_segmentation, t2_constraintBoundary, t3_motionAndPhase,
     t4_radioReception, t5_batteryDockSpare, t6_repeatability,
     t7_surrogateSanity, t8_weightsReconcile, t9_independence,
+    t10_frozenParameters,
   ]
   const results = tests.map((fn) => {
     try { return fn() } catch (e) { return ok(fn.name, false, `threw: ${e.message}`) }

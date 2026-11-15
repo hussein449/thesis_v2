@@ -14,22 +14,25 @@
  * how many detection windows of delay a miss is considered worth.
  */
 
+import { FROZEN, checksumValid } from './frozen-config'
 import { withSegments } from './patrol-modes'
 import { simulateOnce } from './detection-sim'
 import { m51 } from './harness'
 
+// Predeclared in frozen-config.js. Not editable here: a default that can be
+// nudged at the point of use is not a frozen parameter.
 export const OBJECTIVE_DEFAULTS = {
-  gamma: 1.0,       // miss penalty, predeclared
-  epsilon: 0.02,    // max tolerated overall miss probability
-  epsilonRegion: null, // optional per-region cap
-  tMax: 600,        // s — must match params.maxDetectionWindow
+  gamma: FROZEN.primary.gamma,
+  epsilon: FROZEN.primary.epsilon,
+  epsilonRegion: null,            // optional per-region cap, unused so far
+  tMax: FROZEN.primary.tMax,
 }
 
 /**
  * Development seeds. Deliberately disjoint from the harness's reporting
- * seeds (base 42) so refinement never tunes on the numbers it is judged by.
+ * seeds so refinement never tunes on the numbers it is judged by.
  */
-export const DEV_SEED_BASE = 777000
+export const DEV_SEED_BASE = FROZEN.devSeedBase
 
 export function devSeeds(n) {
   return Array.from({ length: n }, (_, i) => DEV_SEED_BASE + i * 2671)
@@ -45,6 +48,13 @@ export function devSeeds(n) {
 export function evaluatePartition({
   segments, M, seeds, params = {}, objective = {},
 }) {
+  if (!checksumValid()) {
+    throw new Error(
+      'frozen-config.js has been edited without updating its checksum — '
+      + 'every result produced with the new values is invalid until the '
+      + 'change is declared and the experiments re-run'
+    )
+  }
   const O = { ...OBJECTIVE_DEFAULTS, ...objective }
   const road = m51()
   const allocation = [{ road, drones: M }]
