@@ -102,13 +102,19 @@ improvement in model fit, while predicted regional crash totals showed strong
 in-sample agreement with observations (correlation 0.990).
 
 Across 50 simulated 30-day periods per fleet size, risk-aware allocation
-reduced the average alert-reception time among detected crashes from 177 to
-140~s with ten drones. It also achieved a two-minute alert for 80\% of crashes
+reduced the average alert-reception time among detected crashes from 180 to
+142~s with ten drones. It also achieved a two-minute alert for 80\% of crashes
 using approximately 19 drones instead of 21. However, with 13 drones,
-risk-aware allocation missed 7.7\% of crashes within the 600~s detection window,
+risk-aware allocation missed 6.9\% of crashes within the 600~s detection window,
 compared with none under uniform allocation, because of excessively long patrol
-segments in lower-risk regions. These simulation-based findings highlight the
-trade-off between rapid alert acquisition and geographical coverage.
+segments in lower-risk regions. Adding a coverage constraint removes this
+penalty: coverage-constrained risk-aware allocation (CCR-UAV), which permits
+no segment longer than $vT_{\max}/2$, missed no crashes at any fleet size it
+could serve and gave the shortest alert times of the three strategies from 16
+drones upward, although it is infeasible below twelve drones on this corridor.
+These simulation-based findings highlight the trade-off between rapid alert
+acquisition and geographical coverage, and show that an explicit coverage
+constraint resolves it.
 \end{abstract}
 
 \noindent\textbf{Keywords:} UAV swarm; road accident detection;
@@ -745,6 +751,7 @@ section and slot is drawn on its own. The simulator is never told the yearly
 total. It simply comes out of the rates.
 
 \subsection{Multi-UAV Patrol and Allocation}
+\label{sec:allocation}
 
 The system has $M$ identical UAVs. Each UAV is assigned one patrol segment $[A_j,B_j]$ of the road and flies back and forth along it at a constant speed $v$. We compare three allocation strategies: uniform, risk-aware, and coverage-constrained risk-aware (CCR-UAV).
 \paragraph{Uniform.}
@@ -908,7 +915,13 @@ Spare UAVs may temporarily replace departing UAVs to reduce
 interruptions in geographical coverage.
 
 \subsection{Experimental Design and Metrics}
-The initial experiment compares uniform and risk-aware UAV allocation.
+The experiment compares all three allocations of
+Section~\ref{sec:allocation}: uniform,
+risk-aware and CCR-UAV. The first two are reported together throughout,
+because they can be run at every fleet size; CCR-UAV is reported separately
+in Section~\ref{sec:ccr_results}, because its length cap leaves it undefined
+below twelve drones and a single table would otherwise suggest it simply
+performed badly there.
 Table~\ref{tab:params} lists the simulation settings used for this comparison.  Each trial covers 30
 simulated days in steps of 5~s, at the road's real fitted crash rate. The crash rate was not artificially increased. A fleets size of $M\in\{1,2,3,5,7,10,13,16,20,25,30\}$ UAVs were evalulated, with 50 trials for each fleet size and each plan. This gives about 1{,}800 crashes behind every point in the
 results. For each trial and fleet size, both plans face \emph{exactly the same} crashes, because crashes are created by their own random number generator, separate from the one used to place the drones. The runs can be repeated exactly: the random seed for trial $t$ is $42+1009\,t+7919\,M$.
@@ -1600,10 +1613,21 @@ uniform plan is slightly ahead. A fast drone can cover a long segment quickly,
 so putting more drones on busy stretches no longer pays off.
 
 \paragraph{Battery and Docking.}
-Turning off the battery model changes the average alert time by 2.7\% for the
-uniform plan (184.6~s against 179.7~s) and by 8.5\% for the risk-aware plan
-(129.9~s against 141.9~s). With ten drones, battery limits have only a small
-effect, which is what the spare drones are designed to achieve.
+Under the battery-swap model of Table~\ref{tab:params}, the operational layer
+has no measurable effect on the average alert time. Both arms use the same
+seed rule, so each trial faces identical crashes with the layer switched on
+and off and the comparison can be paired. Over 200 trials with ten drones,
+turning the layer off changes the average alert time by $+2.4\pm2.6$~s for
+the uniform plan (182.8~s against 180.7~s) and by $-1.8\pm2.4$~s for the
+risk-aware plan (138.8~s against 140.7~s). With thirteen drones every
+difference falls below 1.0~s, including CCR-UAV at $+0.5\pm1.7$~s. All five
+95\% confidence intervals contain zero, so none of these differences can be
+separated from simulation noise. We use 200 trials here rather than the 30
+used elsewhere in this section because at 30 trials the paired standard error
+is 4 to 8~s, which cannot resolve an effect of a few seconds. Battery limits
+therefore cost almost nothing in alert time at these fleet sizes, which is
+what the spare drones and the along-corridor docking stations are meant to
+achieve.
 
 \subsection{Time of Day}
 
@@ -1716,9 +1740,19 @@ wins on missed crashes with 13 to 16 drones. Uniform segments are never longer
 than $L/M$, which protects the worst case in a way the risk-aware plan does not.
 The fix is not to drop the risk-aware plan but to limit it: no segment should
 be longer than $v\,T_{\max}/2$ (2.4~km here), so that no drone is given more
-road than it can cover in time. The equal-load rule would then work within this
-limit. We did not add this limit here, because showing the trade-off as it is
-tells the reader more than showing a patched version.
+road than it can cover in time. This is what CCR-UAV does, and
+Section~\ref{sec:ccr_results} shows that it works. Under the cap the same
+risk weighting misses nothing at any fleet size it can serve, while still
+beating the uniform plan on average alert time from 16 drones on. The
+trade-off in Figure~\ref{fig:cdf} is therefore not inherent to risk-aware
+patrolling; it is what happens when risk is balanced without a coverage
+constraint.
+
+The constraint is not free. It makes the strategy undefined below
+$\lceil L/L_{\max}\rceil$ drones, twelve on this corridor, where the other
+two plans still produce an answer, however poor. A planner choosing between
+them is therefore choosing between a plan that always returns something and
+a plan that refuses to run until the fleet can actually cover the road.
 
 \subsection{Comparison with Previous Studies}
 
@@ -1819,9 +1853,13 @@ $R_{\mathrm{IoT}}$, with no lost messages, blocked signals or sensor failures.
 It also assumes that a drone does not leave for the dock before it reaches the
 crash, and the 5~s time step can make alert times up to one step too short.
 Real alert times will therefore be longer than those reported here. Third, the
-method that builds the risk-aware segments is uneven at the southern end: it
-leaves a 0.6~km last segment with 10 drones and a 9.6~km one with 13 and 16
-drones, and a more balanced splitting method would avoid this.
+greedy method that builds the risk-aware segments is uneven at the southern
+end: it leaves a 0.6~km last segment with 10 drones and a 9.6~km one with 13
+and 16 drones, because the last segment simply takes whatever is left.
+CCR-UAV does not share this weakness, since its partition is chosen by
+dynamic programming over the whole corridor rather than by a single pass,
+but it is unavailable below twelve drones, so the uneven split still affects
+every risk-aware result reported here.
 
 % ===========================================================================
 \section{Conclusion}
@@ -1842,25 +1880,40 @@ Roadside activity is the strongest risk factor, with a rate ratio of 3.84,
 ahead of traffic, speed and road curves. The Poisson model fits well: the
 leftover spread is 1.13, and the negative binomial improves the fit by only
 3.4 AIC. The fitted rates show strong in-sample agreement with observed regional crash totals (correlation 0.990), but the model cannot distinguish between the two
-rush-hour periods. In the simulator, the risk-aware plan built on these rates cut the average alert time by 21\% to 26\% with 7 to 16 drones. It reached the target of detecting 80\% of crashes within two minutes with about 19 drones instead of 21. But for some fleet sizes it left a long, quiet southern segment almost uncovered, and missed about 7.7\% of crashes where the uniform plan missed none.
+rush-hour periods. In the simulator, the risk-aware plan built on these rates cut the average alert time by 21\% to 26\% with 7 to 16 drones. It reached the target of detecting 80\% of crashes within two minutes with about 19 drones instead of 21. But for some fleet sizes it left a long, quiet southern segment almost uncovered, and missed about 7\% of crashes where the uniform plan missed none.
+Adding a coverage constraint resolves that. CCR-UAV, which keeps the risk
+weighting but allows no segment longer than $v\,T_{\max}/2$, misses nothing at
+any fleet size it can serve and has the best average alert time of the three
+from 16 drones on, reaching 25.9~s against the uniform plan's 33.6~s at 30
+drones. Its cost is that it is undefined below twelve drones on this corridor,
+where no segmentation can satisfy the cap.
 
 \paragraph{Scientific Contribution.}
 The study shows three things. First, for crash modelling on a single road with
 limited data, what limits the results most is how precisely the crash records
 give locations, not how advanced the statistical method is. Second, even under this limitation, a fitted crash-rate model provides a quantitative and interpretable basis
-for UAV patrol allocation, with predictions that can be evaluated against observed accident records. Third, a drone patrol plan that follows crash risk must also respect how far a drone can fly in time; otherwise it trades a better average for crashes that are never found.
+for UAV patrol allocation, with predictions that can be evaluated against observed accident records. Third, a drone patrol plan that follows crash risk must also respect how far a drone can fly in time; otherwise it trades a better average for crashes that are never found. Imposing that limit explicitly, as
+CCR-UAV does, recovers the risk-aware gain without the coverage penalty, at
+the price of a minimum fleet below which the strategy has no valid solution
+at all.
 
 \paragraph{Recommendations for Future Work.}
-We suggest five next steps. First, limit every risk-aware segment to
-$v\,T_{\max}/2$ and repeat the comparison; we expect this to remove the missed
-crashes without losing most of the gain in the average. Second, find the exact
+We suggest four next steps. First, find the exact
 location of a sample of crashes to test whether risk is really even within each
-region. Third, model crash severity, so that the plan can favour the most
-serious crashes. Fourth, install the hardware prototype on a real guardrail to
+region. Second, model crash severity, so that the plan can favour the most
+serious crashes. Third, install the hardware prototype on a real guardrail to
 measure the alert range and delay, choose the spacing between sensors, and add
 a realistic radio model with lost messages and blocked signals in place of the
-perfect alert zone. Fifth, repeat the study on another road with strict access
+perfect alert zone. Fourth, repeat the study on another road with strict access
 control, to test whether roadside activity matters as much elsewhere.
+
+A fifth step, capping every risk-aware segment at $v\,T_{\max}/2$, was carried
+out in this paper rather than left for later: CCR-UAV in
+Section~\ref{sec:ccr_results} removes the missed crashes exactly as expected,
+and keeps the gain in the average above 16 drones. What it leaves open is the
+bottom of the range, where the cap makes the strategy infeasible; a hybrid
+that falls back to uniform allocation below $\lceil L/L_{\max}\rceil$ drones
+would cover that gap and is worth testing.
 
 % ===========================================================================
 
