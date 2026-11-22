@@ -22,3 +22,28 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ---------------------------------------------------------------------------
+# Restricted data — must never be committed
+# ---------------------------------------------------------------------------
+# The crash panel is derived from Lebanese Red Cross ambulance dispatch
+# records and CNRS-L tari2ak GPS data. Neither provider has authorised public
+# release, and the panel carries per-cell patient detail (n_status_dead,
+# n_female / n_male, mean_age, cause breakdowns) well beyond the aggregate
+# figures the paper reports. The manuscript's Data Availability section states
+# that these datasets are not publicly available, so the repository must stay
+# consistent with that.
+#
+# Derived products that aggregate to the published level are fine to commit:
+# src/partitioning/data/risk-table.json and sandbox/ccr/risk-table-corrected.json
+# hold only the 7 regions x 5 slots fitted rates.
+data/panel/
+
+# Per-cell observed crash counts. predictions.csv carries n_crashes for each
+# region x month x time-slot cell of the holdout window (350 cells, 412
+# crashes). That is finer than anything the paper reports, and it is the
+# restricted panel's response variable, so it stays local. The aggregate
+# scores derived from it -- comparison.csv and comparison.json -- are
+# published instead, and anyone with authorised access to the panel can
+# regenerate predictions.csv with scripts/validation/step2_fit_predict.py.
+data/validation/predictions.csv
