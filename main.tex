@@ -904,7 +904,7 @@ measurements from it.
 The simulator assumes a constant battery discharge rate of 2\% per minute during flight, including patrolling and travelling to and from docking stations. This corresponds to a nominal flight endurance of 50 minutes, consistent with the maximum flight times reported by DJI (Matrice 350 RTK, 55 minutes) and Autel Robotics (EVO Max 4T, 42 minutes) at approximately 8~m/s under
 windless conditions.
 
-When a UAV approaches its battery reserve threshold, it temporarily leaves its patrol segment for battery replacement at a docking stationbefore resuming its patrol.
+When a UAV approaches its battery reserve threshold, it temporarily leaves its patrol segment for battery replacement at a docking station before resuming its patrol.
 
 To support continuous patrol operations, the simulation considers
 battery replacement at docking stations rather than conventional
@@ -923,7 +923,7 @@ in Section~\ref{sec:ccr_results}, because its length cap leaves it undefined
 below twelve drones and a single table would otherwise suggest it simply
 performed badly there.
 Table~\ref{tab:params} lists the simulation settings used for this comparison.  Each trial covers 30
-simulated days in steps of 5~s, at the road's real fitted crash rate. The crash rate was not artificially increased. A fleets size of $M\in\{1,2,3,5,7,10,13,16,20,25,30\}$ UAVs were evalulated, with 50 trials for each fleet size and each plan. This gives about 1{,}800 crashes behind every point in the
+simulated days in steps of 5~s, at the road's real fitted crash rate. The crash rate was not artificially increased. A fleet size of $M\in\{1,2,3,5,7,10,13,16,20,25,30\}$ UAVs was evaluated, with 50 trials for each fleet size and each plan. This gives about 1{,}800 crashes behind every point in the
 results. For each trial and fleet size, both plans face \emph{exactly the same} crashes, because crashes are created by their own random number generator, separate from the one used to place the drones. The runs can be repeated exactly: the random seed for trial $t$ is $42+1009\,t+7919\,M$.
 
 Three performance metrics are reported. The \emph{average alert time} is the mean time to detection over the crashes that were detected. The \emph{two-minute detection rate}, $P(T\leq 120\,\mathrm{s})$, represents the percentage of accidents detected within two minutes of their occurrence. The \emph{10-minute exceedance rate} is the proportion of accidents not detected within 600 s.

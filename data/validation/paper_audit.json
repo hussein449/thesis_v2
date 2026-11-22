@@ -1,0 +1,224 @@
+{
+  "generated": "2026-11-22",
+  "checked": 30,
+  "passed": 30,
+  "failed": 0,
+  "rows": [
+    {
+      "ok": true,
+      "claim": "Time step dt",
+      "paper": "5 s",
+      "code": "5 s",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Trial length",
+      "paper": "30 days",
+      "code": "30 days",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Drone speed v",
+      "paper": "8 m/s",
+      "code": "8 m/s",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Alert range R_IoT",
+      "paper": "200 m",
+      "code": "200 m",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Detection window",
+      "paper": "600 s",
+      "code": "600 s",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Trial start time",
+      "paper": "08:00",
+      "code": "08:00",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Battery use",
+      "paper": "2 %/min",
+      "code": "2 %/min",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Return-to-dock level",
+      "paper": "25 %",
+      "code": "25 %",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Battery safety margin",
+      "paper": "5 %",
+      "code": "5 %",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Battery swap at dock",
+      "paper": "120 s",
+      "code": "120 s",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Docking stations",
+      "paper": "5",
+      "code": "5",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Worst case to a dock",
+      "paper": "2.86 km",
+      "code": "2.86 km",
+      "note": "L / 2n"
+    },
+    {
+      "ok": true,
+      "claim": "Spare drone delay",
+      "paper": "30 s",
+      "code": "30 s",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Spare drones",
+      "paper": "max(2, ceil(M/8))",
+      "code": "max(2, ceil(M/8))",
+      "note": "formula read from detection-sim.js line ~524"
+    },
+    {
+      "ok": true,
+      "claim": "Corridor length",
+      "paper": "28.6002 km",
+      "code": "28.6002 km",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Section size / count",
+      "paper": "1 km (29 sections)",
+      "code": "1 km (29 sections)",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "CCR grid resolution",
+      "paper": "100 m",
+      "code": "100 m",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "CCR grid cells",
+      "paper": "286",
+      "code": "286",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "L_max = v*T_max/2",
+      "paper": "2.4 km",
+      "code": "2.4 km",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "CCR minimum fleet",
+      "paper": "12",
+      "code": "12",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Crashes per year (model output)",
+      "paper": "445.9",
+      "code": "445.9",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Panel cells",
+      "paper": "1,085",
+      "code": "1,085",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Observed crashes",
+      "paper": "1,152",
+      "code": "1,152",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Residual dispersion",
+      "paper": "1.13",
+      "code": "1.13",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Regions",
+      "paper": "7",
+      "code": "7",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "RAF rate ratio",
+      "paper": "3.84",
+      "code": "3.84",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Curvature rate ratio",
+      "paper": "1.25",
+      "code": "1.25",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Ramp rate ratio",
+      "paper": "0.70",
+      "code": "0.70",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Traffic rate ratio",
+      "paper": "1.47",
+      "code": "1.47",
+      "note": ""
+    },
+    {
+      "ok": true,
+      "claim": "Speed rate ratio",
+      "paper": "20.29",
+      "code": "20.29",
+      "note": ""
+    }
+  ],
+  "notCheckedHere": [
+    "standard errors, p-values and confidence intervals in Table 7",
+    "AIC improvements in Figure 8",
+    "the data-source descriptions in Table 1 and Table 2",
+    "anything requiring the restricted panel, which is not in the repo"
+  ]
+}

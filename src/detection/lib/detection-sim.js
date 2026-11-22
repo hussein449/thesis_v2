@@ -112,12 +112,14 @@ export const DEFAULT_PARAMS = {
   totalTime: 2592000,        // s — 30 days
 
   // Drone kinematics
-  // [SPEC] DJI Mavic 3 Enterprise specs: 21 m/s max horizontal speed,
-  //         ~46 min flight time. Source: DJI official datasheet
-  //         https://enterprise.dji.com/mavic-3-enterprise/specs
-  //         8 m/s is a conservative surveillance cruise (~38 % of max)
-  //         that extends sortie time and gives the onboard camera enough
-  //         dwell to discriminate roadside events.
+  // [SPEC] 8 m/s is a conservative surveillance cruise, far below the
+  //         maximum horizontal speed of the reference platforms cited in
+  //         the paper (DJI Matrice 350 RTK, Autel Robotics EVO Max 4T).
+  //         Cruising well under maximum extends sortie time and gives the
+  //         onboard camera enough dwell to discriminate roadside events.
+  //         Keep this in step with the Operational Layer section of the
+  //         manuscript, which quotes the endurance of the same two
+  //         platforms.
   droneSpeed: 8,             // m/s
 
   // [SIM] IoT communication range R_IoT for the §9-§12 alert model.
@@ -152,11 +154,12 @@ export const DEFAULT_PARAMS = {
   maxDetectionWindow: 600,   // s
 
   // Battery model (Step 3 — integrated operational simulation)
-  // [DESIGN] 2 % per minute = 0.0333 %/s → 100 % discharges in ~50 min,
-  //         calibrated to the DJI Mavic 3 datasheet (~46 min flight
-  //         time at conservative cruise with a light payload). The
-  //         longer cycle also reduces reserve-pool churn and matches
-  //         the ground-truth surveillance UAV duty-cycle.
+  // [DESIGN] 2 % per minute = 0.0333 %/s → 100 % discharges in ~50 min.
+  //         50 min sits between the maximum flight times of the two
+  //         reference platforms the paper cites: DJI Matrice 350 RTK at
+  //         55 min and Autel Robotics EVO Max 4T at 42 min, both at a
+  //         conservative cruise in still air. The drain is applied to
+  //         every minute in the air, ferry flights to a dock included.
   enableOperational: true,
   batteryDrainRate: 2 / 60,       // %/s in flight  (= 2 %/min), unchanged
 
