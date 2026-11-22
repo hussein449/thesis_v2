@@ -1294,11 +1294,11 @@ gives the numbers behind them.
 \node[font=\scriptsize,anchor=south west,text=black!55] at (axis cs:0.6,123)
   {2-minute target};
 \addplot[color=polUniform,mark=*,mark size=1.6pt,thick] coordinates
- {(1,265.0)(2,257.2)(3,252.9)(5,245.1)(7,226.5)(10,176.6)
-  (13,124.8)(16,93.4)(20,66.4)(25,45.6)(30,31.2)};
+ {(1,256.2)(2,266.2)(3,247.8)(5,240.9)(7,241.2)(10,179.8)
+  (13,122.1)(16,91.8)(20,64.2)(25,42.7)(30,33.6)};
 \addplot[color=polRisk,mark=square*,mark size=1.6pt,thick] coordinates
- {(1,265.0)(2,253.5)(3,245.1)(5,210.7)(7,168.1)(10,139.7)
-  (13,94.7)(16,73.2)(20,64.7)(25,47.8)(30,32.5)};
+ {(1,256.2)(2,243.0)(3,252.5)(5,222.6)(7,172.2)(10,142.0)
+  (13,93.9)(16,73.4)(20,64.7)(25,48.6)(30,32.5)};
 \legend{Uniform, Risk-aware}
 \end{axis}
 \end{tikzpicture}
@@ -1319,11 +1319,11 @@ gives the numbers behind them.
 \node[font=\scriptsize,anchor=north east,text=black!55] at (axis cs:30.5,78)
   {80\% target};
 \addplot[color=polUniform,mark=*,mark size=1.6pt,thick] coordinates
- {(1,4.2)(2,9.9)(3,14.0)(5,22.4)(7,30.1)(10,43.0)
-  (13,55.1)(16,65.4)(20,77.4)(25,88.2)(30,96.5)};
+ {(1,7.0)(2,10.6)(3,13.9)(5,22.7)(7,29.1)(10,42.4)
+  (13,55.8)(16,67.1)(20,77.9)(25,89.5)(30,95.9)};
 \addplot[color=polRisk,mark=square*,mark size=1.6pt,thick] coordinates
- {(1,4.2)(2,12.1)(3,18.7)(5,29.7)(7,40.7)(10,52.0)
-  (13,65.7)(16,74.9)(20,82.1)(25,88.1)(30,95.5)};
+ {(1,7.0)(2,12.9)(3,17.4)(5,27.0)(7,40.6)(10,49.5)
+  (13,67.5)(16,76.1)(20,82.3)(25,88.2)(30,95.7)};
 \legend{Uniform, Risk-aware}
 \end{axis}
 \end{tikzpicture}
@@ -1348,28 +1348,28 @@ alert time across trials.}
 \cmidrule(lr){2-4}\cmidrule(lr){6-8}
 $M$ & \textbf{Average $T$ (s)} & \textbf{Within 2 min} & \textbf{Missed} & & \textbf{Average $T$ (s)} & \textbf{Within 2 min} & \textbf{Missed} \\
 \midrule
-1  & $265.0\pm10.9$ & 4.2\%  & 83.9\% & & $265.0\pm10.9$ & 4.2\%  & 83.9\% \\
-2  & $257.2\pm6.5$  & 9.9\%  & 66.7\% & & $253.5\pm6.2$  & 12.1\% & 61.7\% \\
-3  & $252.9\pm6.2$  & 14.0\% & 54.1\% & & $245.1\pm5.7$  & 18.7\% & 44.8\% \\
-5  & $245.1\pm5.1$  & 22.4\% & 29.0\% & & $210.7\pm4.1$  & 29.7\% & 22.1\% \\
-7  & $226.5\pm4.3$  & 30.1\% & 11.9\% & & $168.1\pm3.9$  & 40.7\% & 14.1\% \\
-10 & $176.6\pm3.5$  & 43.0\% & 0.2\%  & & $139.7\pm2.8$  & 52.0\% & 5.1\%  \\
-13 & $124.8\pm2.3$  & 55.1\% & 0.0\%  & & $94.7\pm3.7$   & 65.7\% & 7.7\%  \\
-16 & $93.4\pm2.0$   & 65.4\% & 0.0\%  & & $73.2\pm2.3$   & 74.9\% & 7.6\%  \\
-20 & $66.4\pm1.8$   & 77.4\% & 0.0\%  & & $64.7\pm2.2$   & 82.1\% & 0.8\%  \\
-25 & $45.6\pm1.0$   & 88.2\% & 0.0\%  & & $47.8\pm1.6$   & 88.1\% & 0.0\%  \\
-30 & $31.2\pm0.9$   & 96.5\% & 0.0\%  & & $32.5\pm1.0$   & 95.5\% & 0.0\%  \\
+1  & $256.2\pm10.9$ & 7.0\%  & 75.5\% & & $256.2\pm10.9$ & 7.0\%  & 75.5\% \\
+2  & $266.2\pm6.0$  & 10.6\% & 63.5\% & & $243.0\pm5.6$  & 12.9\% & 60.0\% \\
+3  & $247.8\pm5.9$  & 13.9\% & 54.8\% & & $252.5\pm5.1$  & 17.4\% & 44.1\% \\
+5  & $240.9\pm4.4$  & 22.7\% & 29.8\% & & $222.6\pm4.9$  & 27.0\% & 20.9\% \\
+7  & $241.2\pm4.4$  & 29.1\% & 10.4\% & & $172.2\pm4.4$  & 40.6\% & 14.0\% \\
+10 & $179.8\pm3.5$  & 42.4\% & 0.3\%  & & $142.0\pm4.1$  & 49.5\% & 5.4\%  \\
+13 & $122.1\pm2.8$  & 55.8\% & 0.0\%  & & $93.9\pm3.1$   & 67.5\% & 6.9\%  \\
+16 & $91.8\pm1.8$   & 67.1\% & 0.0\%  & & $73.4\pm2.3$   & 76.1\% & 8.0\%  \\
+20 & $64.2\pm1.9$   & 77.9\% & 0.0\%  & & $64.7\pm2.1$   & 82.3\% & 0.4\%  \\
+25 & $42.7\pm1.1$   & 89.5\% & 0.0\%  & & $48.6\pm1.4$   & 88.2\% & 0.0\%  \\
+30 & $33.6\pm1.0$   & 95.9\% & 0.0\%  & & $32.5\pm1.0$   & 95.7\% & 0.0\%  \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 The risk-aware plan is faster whenever drones are scarce. The biggest gains are
 in the middle of the range. With seven drones, the average alert time falls
-from 226.5~s to 168.1~s, a 26\% cut. With ten drones, it falls from 176.6~s to
-139.7~s, a 21\% cut. The standard errors here are only 2 to 4~s, so these
+from 241.2~s to 172.2~s, a 29\% cut. With ten drones, it falls from 179.8~s to
+142.0~s, a 21\% cut. The standard errors here are only 3 to 4~s, so these
 differences are far larger than random noise. Above about 25 drones the road is
 well covered and the two plans give almost the same result: with 30 drones,
-both are close to 32~s.
+both are close to 33~s.
 
 The two-minute share tells the same story in practical terms. To detect 80\% of
 crashes within two minutes, the risk-aware plan needs about 19 drones and the
@@ -1396,15 +1396,15 @@ number of seconds. The right side shows the missed share for every fleet size.
   legend style={at={(0.97,0.05)},anchor=south east,draw=none,font=\scriptsize}]
 \addplot[dashed,black!45,forget plot] coordinates {(120,0)(120,1.02)};
 \addplot[color=polUniform,thick,no marks] coordinates
- {(0,0.142)(30,0.219)(60,0.291)(90,0.354)(120,0.430)(150,0.493)(180,0.561)
-  (210,0.620)(240,0.674)(270,0.730)(300,0.783)(330,0.820)(360,0.862)
-  (390,0.889)(420,0.916)(450,0.941)(480,0.961)(510,0.975)(540,0.988)
-  (570,0.993)(600,0.998)};
+ {(0,0.135)(30,0.205)(60,0.273)(90,0.353)(120,0.424)(150,0.494)(180,0.549)
+  (210,0.609)(240,0.663)(270,0.719)(300,0.763)(330,0.812)(360,0.862)
+  (390,0.894)(420,0.918)(450,0.942)(480,0.958)(510,0.973)(540,0.985)
+  (570,0.992)(600,0.997)};
 \addplot[color=polRisk,thick,no marks] coordinates
- {(0,0.168)(30,0.254)(60,0.349)(90,0.429)(120,0.520)(150,0.582)(180,0.639)
-  (210,0.701)(240,0.747)(270,0.791)(300,0.824)(330,0.855)(360,0.872)
-  (390,0.891)(420,0.905)(450,0.915)(480,0.921)(510,0.928)(540,0.937)
-  (570,0.945)(600,0.949)};
+ {(0,0.164)(30,0.261)(60,0.354)(90,0.431)(120,0.495)(150,0.569)(180,0.631)
+  (210,0.688)(240,0.735)(270,0.783)(300,0.821)(330,0.849)(360,0.875)
+  (390,0.886)(420,0.898)(450,0.907)(480,0.917)(510,0.926)(540,0.932)
+  (570,0.938)(600,0.946)};
 \legend{Uniform, Risk-aware}
 \end{axis}
 \end{tikzpicture}
@@ -1423,9 +1423,9 @@ number of seconds. The right side shows the missed share for every fleet size.
   ymajorgrids, grid style={black!12},
   legend style={at={(0.97,0.97)},anchor=north east,draw=none,font=\scriptsize}]
 \addplot[draw=polUniform,fill=polUniform!45] coordinates
- {(5,29.01)(7,11.91)(10,0.23)(13,0.00)(16,0.00)(20,0.00)(25,0.00)(30,0.00)};
+ {(5,29.84)(7,10.38)(10,0.29)(13,0.00)(16,0.00)(20,0.00)(25,0.00)(30,0.00)};
 \addplot[draw=polRisk,fill=polRisk!55] coordinates
- {(5,22.09)(7,14.07)(10,5.13)(13,7.69)(16,7.55)(20,0.80)(25,0.00)(30,0.00)};
+ {(5,20.88)(7,13.96)(10,5.36)(13,6.92)(16,7.98)(20,0.43)(25,0.00)(30,0.00)};
 \legend{Uniform, Risk-aware}
 \end{axis}
 \end{tikzpicture}
@@ -1434,15 +1434,15 @@ number of seconds. The right side shows the missed share for every fleet size.
 dashed line marks two minutes. The risk-aware plan is ahead until about 390~s;
 after that the uniform plan catches up and ends higher. Right: share of crashes
 not detected within 600~s. The uniform plan misses none from 13 drones on; the
-risk-aware plan still misses 7.7\% at 13 drones.}
+risk-aware plan still misses 6.9\% at 13 drones.}
 \label{fig:cdf}
 \end{figure}
 
 The two curves cross. Up to about 390~s, the risk-aware plan has detected more
 crashes at every moment. After that, the uniform plan catches up and ends at
-99.8\%, against 94.9\% for the risk-aware plan. With 13 and 16 drones, the
-uniform plan misses no crashes at all, while the risk-aware plan misses 7.7\%
-and 7.6\%.
+99.7\%, against 94.6\% for the risk-aware plan. With 13 and 16 drones, the
+uniform plan misses no crashes at all, while the risk-aware plan misses 6.9\%
+and 8.0\%.
 
 The reason is segment length. A drone needs $2\ell/v$ seconds to fly the full
 length $\ell$ of its segment and back. For this to fit inside the 600~s window
@@ -1463,12 +1463,12 @@ Table~\ref{tab:sweep}.}
 \toprule
 $M$ & \textbf{Uniform segment (km)} & \textbf{Longest risk-aware segment (km)} & \textbf{Missed, uniform} & \textbf{Missed, risk-aware} \\
 \midrule
-5  & 5.72 & 13.6 (15.0--28.6) & 29.0\% & 22.1\% \\
-7  & 4.09 & 10.6 (18.0--28.6) & 11.9\% & 14.1\% \\
-10 & 2.86 & 8.0 (20.0--28.0)  & 0.2\%  & 5.1\%  \\
-13 & 2.20 & 9.6 (19.0--28.6)  & 0.0\%  & 7.7\%  \\
-16 & 1.79 & 9.6 (19.0--28.6)  & 0.0\%  & 7.6\%  \\
-20 & 1.43 & 4.0 (20.0--24.0)  & 0.0\%  & 0.8\%  \\
+5  & 5.72 & 13.6 (15.0--28.6) & 29.8\% & 20.9\% \\
+7  & 4.09 & 10.6 (18.0--28.6) & 10.4\% & 14.0\% \\
+10 & 2.86 & 8.0 (20.0--28.0)  & 0.3\%  & 5.4\%  \\
+13 & 2.20 & 9.6 (19.0--28.6)  & 0.0\%  & 6.9\%  \\
+16 & 1.79 & 9.6 (19.0--28.6)  & 0.0\%  & 8.0\%  \\
+20 & 1.43 & 4.0 (20.0--24.0)  & 0.0\%  & 0.4\%  \\
 25 & 1.14 & 2.0 (12.0--14.0)  & 0.0\%  & 0.0\%  \\
 30 & 0.95 & 1.0               & 0.0\%  & 0.0\%  \\
 \bottomrule
