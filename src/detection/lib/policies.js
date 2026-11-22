@@ -117,4 +117,39 @@ export const POLICIES = {
     // §6.2 — greedy equal-cumulative-risk grouping of 1-km sections.
     patrolMode: 'risk-aware',
   },
+  ccr: {
+    key: 'ccr',
+    label: 'CCR-UAV',
+    color: '#0d9488',
+    description:
+      'Risk-weighted segments on a 100 m grid, chosen by dynamic programming '
+      + 'under a hard length cap L_max = v*T_max/2, so no segment can exceed '
+      + 'what one UAV revisits inside the detection window.',
+    // Road-level apportionment is unchanged; CCR acts on the segments within
+    // a road, which is where its length cap applies.
+    allocate: allocateRiskAware,
+    // §6.3 — exact DP partition under the coverage constraint.
+    patrolMode: 'ccr',
+    // Unlike the other two, CCR cannot cover a corridor with an arbitrarily
+    // small fleet: below ceil(L / L_max) UAVs no length-capped partition
+    // exists. Callers must expect buildPatrolSegments to throw
+    // CcrInfeasibleError there and report the point as not applicable rather
+    // than relaxing the cap. minFleetFor() lets the UI say so in advance.
+    mayBeInfeasible: true,
+  },
+}
+
+/**
+ * Smallest fleet for which CCR-UAV can cover `corridorLengthM` at all.
+ *
+ * Mirrors minimumFleet() in ccr-uav.js, but takes the speed and window from
+ * the simulation parameters so the UI reports the limit for the settings the
+ * user has actually chosen. Returns 1 for the policies without a cap.
+ */
+export function minFleetFor(policyKey, corridorLengthM, params = {}) {
+  if (POLICIES[policyKey]?.patrolMode !== 'ccr') return 1
+  const v = params.droneSpeed ?? 8
+  const tMax = params.maxDetectionWindow ?? 600
+  const lMax = (v * tMax) / 2
+  return Math.max(1, Math.ceil(corridorLengthM / lMax))
 }

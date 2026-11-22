@@ -11,7 +11,7 @@ import {
   DEFAULT_RHO_LIST,
   CORRIDOR,
 } from '../lib/batteryDocking'
-import { POLICIES } from '../lib/policies'
+import { POLICIES, minFleetFor } from '../lib/policies'
 
 // ── Styling tokens (mirror DetectionCDFPlots) ────────────────────────────────
 const grid = '#1e293b'
@@ -20,11 +20,30 @@ const textColor = '#64748b'
 // Use the same colors as the rest of the detection app.
 const UNIFORM_COLOR = POLICIES.uniform.color      // #1D4ED8
 const RISKAWARE_COLOR = POLICIES.riskAware.color  // #f97316
+const CCR_COLOR = POLICIES.ccr.color              // #0d9488
 
 const MODES = [
   { key: 'uniform',    label: 'Uniform',    color: UNIFORM_COLOR },
   { key: 'risk-aware', label: 'Risk-aware', color: RISKAWARE_COLOR },
+  { key: 'ccr',        label: 'CCR-UAV',    color: CCR_COLOR },
 ]
+
+/**
+ * Run one strategy, or return null when it cannot cover the corridor with
+ * this fleet.
+ *
+ * CCR-UAV throws CcrInfeasibleError below ceil(L / L_max). Returning null
+ * lets the panel show a short explanation instead of letting the error
+ * escape and blank the whole view.
+ */
+function runOrNull(fn) {
+  try {
+    return fn()
+  } catch (err) {
+    if (err?.code === 'CCR_INFEASIBLE') return null
+    throw err
+  }
+}
 
 const M_CHOICES = [3, 5, 8, 10, 15, 20]
 
@@ -205,9 +224,10 @@ export default function FleetAvailabilityPlots() {
   // Full ρ sweep for both modes (fast — deterministic)
   const sweep = useMemo(() => sweepReserveRatios({ M }), [M])
 
-  // Detailed single-run for the per-segment view
+  // Detailed single-run for the per-segment view. null when the selected
+  // strategy cannot cover the corridor at this fleet size.
   const detail = useMemo(
-    () => simulateBatteryDocking({ M, rho, mode }),
+    () => runOrNull(() => simulateBatteryDocking({ M, rho, mode })),
     [M, rho, mode]
   )
 
@@ -216,13 +236,18 @@ export default function FleetAvailabilityPlots() {
   const pfailData = useMemo(() => pivotByRho(sweep, 'Pfail'), [sweep])
   const pnoresData = useMemo(() => pivotByRho(sweep, 'PnoReserve'), [sweep])
 
-  // Per-segment U bar data
-  const segData = detail.segments.map((s) => ({
-    segment: `S${s.index}`,
-    U: +s.U.toFixed(3),
-  }))
+  // Per-segment U bar data. Empty when the strategy could not run here.
+  const segData = detail
+    ? detail.segments.map((s) => ({
+      segment: `S${s.index}`,
+      U: +s.U.toFixed(3),
+    }))
+    : []
 
-  const activeColor = mode === 'risk-aware' ? RISKAWARE_COLOR : UNIFORM_COLOR
+  const activeColor = MODES.find((m) => m.key === mode)?.color ?? UNIFORM_COLOR
+  // Smallest fleet CCR-UAV can cover the corridor with, for the message
+  // shown when the current M is below it.
+  const minFleet = minFleetFor('ccr', CORRIDOR.lengthKm * 1000)
 
   function exportFullSweep() {
     downloadCSV(
@@ -243,6 +268,7 @@ export default function FleetAvailabilityPlots() {
   }
 
   function exportSegments() {
+    if (!detail) return
     downloadCSV(
       detail.segments.map((s) => ({
         segment: s.index,
@@ -387,16 +413,25 @@ export default function FleetAvailabilityPlots() {
         </ResponsiveContainer>
 
         {/* Headline numbers — inline pills, no nested cards */}
-        <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
-          <Stat label="U_avg" value={`${detail.metrics.Uavg.toFixed(2)}%`} />
-          <Stat label="U_max" value={`${detail.metrics.Umax.toFixed(2)}%`} />
-          <Stat label="P_fail" value={`${detail.metrics.Pfail.toFixed(1)}%`} />
-          <Stat label="P_no_reserve" value={`${detail.metrics.PnoReserve.toFixed(1)}%`} />
-          <Stat label="Replacements/day" value={`${detail.metrics.replacements}`} />
-          <Stat label="Avg reserves" value={detail.metrics.avgReserves.toFixed(2)} />
-          <Stat label="N reserves" value={detail.N_reserve} />
-          <Stat label="M segments" value={detail.M} />
-        </div>
+        {detail ? (
+          <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+            <Stat label="U_avg" value={`${detail.metrics.Uavg.toFixed(2)}%`} />
+            <Stat label="U_max" value={`${detail.metrics.Umax.toFixed(2)}%`} />
+            <Stat label="P_fail" value={`${detail.metrics.Pfail.toFixed(1)}%`} />
+            <Stat label="P_no_reserve" value={`${detail.metrics.PnoReserve.toFixed(1)}%`} />
+            <Stat label="Replacements/day" value={`${detail.metrics.replacements}`} />
+            <Stat label="Avg reserves" value={detail.metrics.avgReserves.toFixed(2)} />
+            <Stat label="N reserves" value={detail.N_reserve} />
+            <Stat label="M segments" value={detail.M} />
+          </div>
+        ) : (
+          <div className="mt-3 text-[11px] text-slate-400">
+            {POLICIES.ccr.label} cannot cover the {CORRIDOR.lengthKm.toFixed(1)} km
+            corridor with {M} UAVs: its cap L<sub>max</sub> = v·T<sub>max</sub>/2
+            needs at least {minFleet}. Pick a larger fleet, or another strategy,
+            rather than reading this as a worse result.
+          </div>
+        )}
       </div>
 
       {/* ── Interpretation ── */}

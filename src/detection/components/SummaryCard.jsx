@@ -40,44 +40,58 @@ function computeSummary(results) {
   const policies = Object.keys(results)
   if (policies.length < 2) return null
 
-  const [a, b] = policies
-  const merged = []
-  for (let i = 0; i < results[a].length; i++) {
-    const ra = results[a][i]
-    const rb = results[b].find((x) => x.N === ra.N)
-    if (!rb) continue
-    merged.push({
-      N: ra.N,
-      a: ra.avgDetectionTime,
-      b: rb.avgDetectionTime,
-      pa: ra.pUnder2Min,
-      pb: rb.pUnder2Min,
+  // Every fleet size any policy reported, in order. A policy may be missing
+  // a point entirely (CCR-UAV below its length cap), so the set of sizes is
+  // the union rather than one policy's list.
+  const sizes = [...new Set(
+    policies.flatMap((p) => results[p].map((x) => x.N))
+  )].sort((x, y) => x - y)
+  if (sizes.length === 0) return null
+
+  /**
+   * Rank the policies at one fleet size.
+   *
+   * A point is skipped when the policy could not run there at all: CCR-UAV
+   * is reported infeasible below ceil(L / L_max), and showing it as a loss
+   * would read as "it was slower" rather than "it was not applicable".
+   */
+  function rank(N) {
+    const entries = []
+    for (const p of policies) {
+      const r = results[p].find((x) => x.N === N)
+      if (!r || r.infeasible || r.avgDetectionTime == null) continue
+      entries.push({ policy: p, t: r.avgDetectionTime })
+    }
+    entries.sort((u, v) => u.t - v.t)
+    if (entries.length === 0) return null
+    // Within a second of each other is a tie, as before.
+    const tied = entries.filter((e) => Math.abs(e.t - entries[0].t) < 1)
+    return {
+      N,
+      entries,
+      winner: tied.length === entries.length && entries.length > 1
+        ? 'tie'
+        : entries[0].policy,
+      tiedCount: tied.length,
+    }
+  }
+
+  const small = rank(sizes[0])
+  const large = rank(sizes[sizes.length - 1])
+  if (!small || !large) return null
+
+  // Fleet sizes where a policy could not run, so the card can say so
+  // instead of leaving a silent gap in the comparison.
+  const notApplicable = {}
+  for (const p of policies) {
+    const missing = sizes.filter((N) => {
+      const r = results[p].find((x) => x.N === N)
+      return !r || r.infeasible
     })
-  }
-  if (merged.length === 0) return null
-
-  const first = merged[0]
-  const last = merged[merged.length - 1]
-
-  function winner(av, bv) {
-    if (av == null && bv == null) return 'tie'
-    if (av == null) return b
-    if (bv == null) return a
-    if (Math.abs(av - bv) < 1) return 'tie'
-    return av < bv ? a : b
+    if (missing.length) notApplicable[p] = missing
   }
 
-  return {
-    a, b,
-    smallN: first.N,
-    largeN: last.N,
-    smallNWinner: winner(first.a, first.b),
-    largeNWinner: winner(last.a, last.b),
-    smallN_a: first.a,
-    smallN_b: first.b,
-    largeN_a: last.a,
-    largeN_b: last.b,
-  }
+  return { small, large, notApplicable }
 }
 
 export default function SummaryCard({ results }) {
@@ -111,30 +125,45 @@ export default function SummaryCard({ results }) {
         </div>
       ) : (
         <div className="space-y-2.5 text-[11.5px] text-slate-200 leading-relaxed">
-          <p>
-            At the smallest fleet size <span className="font-mono font-medium text-slate-100">N = {summary.smallN}</span>,{' '}
-            <span style={{ color: POLICIES[summary.smallNWinner]?.color }} className="font-medium">
-              {summary.smallNWinner === 'tie' ? 'both policies are within 1 s' : `${POLICIES[summary.smallNWinner]?.label} wins`}
-            </span>{' '}
-            <span className="text-slate-400">
-              ({summary.a}: {summary.smallN_a?.toFixed(0) ?? '—'} s vs {summary.b}: {summary.smallN_b?.toFixed(0) ?? '—'} s avg detection time).
-            </span>
-          </p>
-          <p>
-            At the largest fleet size <span className="font-mono font-medium text-slate-100">N = {summary.largeN}</span>,{' '}
-            <span style={{ color: POLICIES[summary.largeNWinner]?.color }} className="font-medium">
-              {summary.largeNWinner === 'tie' ? 'both policies are within 1 s' : `${POLICIES[summary.largeNWinner]?.label} wins`}
-            </span>{' '}
-            <span className="text-slate-400">
-              ({summary.a}: {summary.largeN_a?.toFixed(0) ?? '—'} s vs {summary.b}: {summary.largeN_b?.toFixed(0) ?? '—'} s avg detection time).
-            </span>
-          </p>
+          {[['smallest', summary.small], ['largest', summary.large]].map(([which, r]) => (
+            <p key={which}>
+              At the {which} fleet size{' '}
+              <span className="font-mono font-medium text-slate-100">N = {r.N}</span>,{' '}
+              <span
+                style={{ color: r.winner === 'tie' ? undefined : POLICIES[r.winner]?.color }}
+                className="font-medium"
+              >
+                {r.winner === 'tie'
+                  ? 'the strategies are within 1 s of each other'
+                  : `${POLICIES[r.winner]?.label ?? r.winner} wins`}
+              </span>{' '}
+              <span className="text-slate-400">
+                ({r.entries
+                  .map((e) => `${POLICIES[e.policy]?.label ?? e.policy}: ${e.t.toFixed(0)} s`)
+                  .join(' vs ')} avg detection time).
+              </span>
+            </p>
+          ))}
+          {Object.entries(summary.notApplicable).map(([p, sizes]) => (
+            <p key={p} className="text-slate-400">
+              <span style={{ color: POLICIES[p]?.color }} className="font-medium">
+                {POLICIES[p]?.label ?? p}
+              </span>{' '}
+              could not cover the corridor at N = {sizes.join(', ')} and is left
+              out of the comparison there: below{' '}
+              <span className="font-mono">⌈L / (v·T<sub>max</sub>/2)⌉</span> UAVs no
+              partition respects its length cap, and relaxing the cap would make
+              it a different strategy.
+            </p>
+          ))}
           <p className="text-slate-400">
             Risk-aware patrol concentrates drones on high-risk sections
             (Khalde, Awali) and stretches them across the open mid-corridor,
             cutting detection time where accidents are most likely.
             Uniform spreads drones evenly along the corridor — simpler, but
-            it pays a coverage tax at the risk-heavy ends.
+            it pays a coverage tax at the risk-heavy ends. CCR-UAV keeps the
+            risk weighting but refuses any segment longer than one UAV can
+            revisit inside the detection window.
           </p>
         </div>
       )}

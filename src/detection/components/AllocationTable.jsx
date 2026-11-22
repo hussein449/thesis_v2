@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
-import { POLICIES } from '../lib/policies'
-import { allocateDrones } from '../../partitioning/lib/roads'
+import { POLICIES, minFleetFor } from '../lib/policies'
+import { allocateDrones, ROADS } from '../../partitioning/lib/roads'
 import { RISK_PROVENANCE, ANNUAL_CRASHES } from '../../partitioning/lib/risk-scoring'
 import { RiskScoreTable } from '../../partitioning/PartitionPage'
 import { RoadDetailPopup } from '../../partitioning/components/StatsPanel'
+
+// The study corridor's length, for the CCR-UAV minimum-fleet note below.
+const CORRIDOR_KM = +(
+  (ROADS.find((r) => r.shortName?.includes('M51')) ?? ROADS[0]).lengthKm
+).toFixed(1)
 
 function RiskScoreModal({ open, onClose, allocations }) {
   useEffect(() => {
@@ -209,6 +214,18 @@ export default function AllocationTable({ N }) {
         The fitted per-section rate R<sub>i,b</sub> drives the accident generator and the risk-aware segmentation;
         with a single corridor (R = 1) Uniform and Risk-aware allocate identically across roads, so the comparison shows up as patrol-density differences within M51 rather than between roads.
         The road-level risk score in the table above is a separate composite index used only for cross-road comparison — it is not the model that places accidents.
+      </div>
+      <div className="mt-2 text-[9.5px] text-[var(--color-txt3)] leading-relaxed">
+        <span style={{ color: POLICIES.ccr.color }} className="font-medium">
+          {POLICIES.ccr.label}
+        </span>{' '}
+        has no column here because it shares Risk-aware&rsquo;s apportionment{' '}
+        <em>across</em> roads; the two differ in how each road is then cut into
+        patrol segments. CCR-UAV caps every segment at
+        L<sub>max</sub> = v·T<sub>max</sub>/2, which on this {CORRIDOR_KM} km corridor
+        needs at least {minFleetFor('ccr', CORRIDOR_KM * 1000)} UAVs — below that it
+        reports no allocation at all rather than relaxing the cap. The effect is
+        visible in the detection and availability charts, not in this table.
       </div>
     </div>
 

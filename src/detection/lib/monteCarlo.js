@@ -42,7 +42,9 @@ export async function runSweep({
   trialsPerPoint = 30,
   baseSeed = 42,
   params = {},
-  policies = ['uniform', 'riskAware'],
+  // All three strategies of §6 by default. CCR-UAV reports points below its
+  // length cap as infeasible instead of running them.
+  policies = ['uniform', 'riskAware', 'ccr'],
   onProgress = null,
 }) {
   const totalRuns = droneCounts.length * policies.length * trialsPerPoint
@@ -71,9 +73,27 @@ export async function runSweep({
       // patrol segments per road.
       const trialParams = { ...params, patrolMode: policy.patrolMode ?? 'uniform' }
 
+      // CCR-UAV has no admissible partition below ceil(L / L_max) UAVs. When
+      // that happens the point is reported as not applicable and the other
+      // policies keep their results at the same fleet size; the alternative
+      // would be to relax the length cap, which is the constraint that
+      // defines the strategy.
+      let infeasible = null
+
       for (let trial = 0; trial < trialsPerPoint; trial++) {
         const seed = baseSeed + trial * 1009 + N * 7919
-        const result = simulateOnce({ allocation, params: trialParams, seed })
+        let result
+        try {
+          result = simulateOnce({ allocation, params: trialParams, seed })
+        } catch (err) {
+          if (err?.code !== 'CCR_INFEASIBLE') throw err
+          infeasible = { reason: err.reason, minimumFleet: err.minimumFleet }
+          // Keep the progress bar honest about the trials being skipped.
+          done += trialsPerPoint - trial
+          onProgress?.(done, totalRuns)
+          await nextTick()
+          break
+        }
 
         detectionTimes.push(...result.detectionTimes)
         nDetected += result.nDetected
@@ -105,6 +125,24 @@ export async function runSweep({
           onProgress?.(done, totalRuns)
           await nextTick()
         }
+      }
+
+      if (infeasible) {
+        points.push({
+          N,
+          infeasible: true,
+          minimumFleet: infeasible.minimumFleet,
+          reason: infeasible.reason,
+          avgDetectionTime: null,
+          pUnder2Min: null,
+          detectionRate: null,
+          medianDetectionTime: null,
+          nDetected: 0,
+          nMissed: 0,
+          nTotal: 0,
+        })
+        availabilityAccumulator.push({ N, timeline: [] })
+        continue
       }
 
       const avgDetectionTime =

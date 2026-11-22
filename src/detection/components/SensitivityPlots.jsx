@@ -13,6 +13,10 @@ import {
 import { simulateOnce, DEFAULT_PARAMS } from '../lib/detection-sim'
 import { POLICIES } from '../lib/policies'
 
+// Every strategy in the registry, so adding one to policies.js shows up here
+// without touching this file again.
+const SERIES = Object.keys(POLICIES)
+
 const FALLBACK_N = 10
 
 // This page deliberately runs each trial for ONE simulated WEEK, not
@@ -104,7 +108,7 @@ async function runSweeps({
         totalTime,
       }
       const row = { v }
-      for (const pKey of ['uniform', 'riskAware']) {
+      for (const pKey of SERIES) {
         const allocation = POLICIES[pKey].allocate(fixedN)
         const trialParams = {
           ...params,
@@ -112,13 +116,25 @@ async function runSweeps({
         }
         let totalDt = 0
         let count = 0
+        let infeasible = false
         for (let t = 0; t < trialsPerPoint; t++) {
           if (isCancelled()) return
-          const r = simulateOnce({
-            allocation,
-            params: trialParams,
-            seed: 42 + t * 31,
-          })
+          let r
+          try {
+            r = simulateOnce({
+              allocation,
+              params: trialParams,
+              seed: 42 + t * 31,
+            })
+          } catch (err) {
+            if (err?.code !== 'CCR_INFEASIBLE') throw err
+            // The swept setting can push CCR-UAV below its length cap —
+            // raising the speed lowers L_max, for instance. Leave the point
+            // out so the line breaks there rather than reporting a value the
+            // strategy never produced.
+            infeasible = true
+            break
+          }
           r.detectionTimes.forEach((dt) => {
             totalDt += dt
             count++
@@ -129,7 +145,7 @@ async function runSweeps({
           // loose enough that the setTimeout overhead is negligible.
           if (t % 2 === 1) await nextTick()
         }
-        row[pKey] = count > 0 ? Math.round(totalDt / count) : null
+        row[pKey] = infeasible || count === 0 ? null : Math.round(totalDt / count)
       }
       rows.push(row)
     }
@@ -214,24 +230,20 @@ function SweepChart({ sweep, data, fixedN, trials, defaultVal }) {
             strokeWidth={1}
             label={{ value: 'Configure', position: 'top', fill: '#B45309', fontSize: 8 }}
           />
-          <Line
-            type="monotone"
-            dataKey="uniform"
-            name={POLICIES.uniform.label}
-            stroke={POLICIES.uniform.color}
-            strokeWidth={2}
-            dot={{ r: 3, fill: POLICIES.uniform.color }}
-            connectNulls
-          />
-          <Line
-            type="monotone"
-            dataKey="riskAware"
-            name={POLICIES.riskAware.label}
-            stroke={POLICIES.riskAware.color}
-            strokeWidth={2}
-            dot={{ r: 3, fill: POLICIES.riskAware.color }}
-            connectNulls
-          />
+          {SERIES.map((pKey) => (
+            <Line
+              key={pKey}
+              type="monotone"
+              dataKey={pKey}
+              name={POLICIES[pKey].label}
+              stroke={POLICIES[pKey].color}
+              strokeWidth={2}
+              dot={{ r: 3, fill: POLICIES[pKey].color }}
+              // Not connectNulls: a gap means the strategy could not run at
+              // that setting, and bridging it would imply a measurement.
+              connectNulls={false}
+            />
+          ))}
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -333,8 +345,10 @@ export default function SensitivityPlots({ fleetSizes, trialsPerPoint, params })
           <span className="text-[var(--color-txt2)] font-semibold">What this page does:</span>{' '}
           for each of the four parameters below, it varies that parameter alone — every other
           parameter is held at your Configure value — and plots mean detection time under
-          both allocation policies. Steeper slope = more sensitive; the gap between the two
-          curves shows where Risk-aware beats Uniform.
+          all three allocation strategies. Steeper slope = more sensitive; the gaps between
+          the curves show where each strategy wins. A curve that breaks means the strategy
+          could not run at that setting — CCR-UAV&rsquo;s length cap tightens as speed falls
+          or the detection window shrinks, and below it no partition exists.
           <br />
           Run setup: N&nbsp;=&nbsp;{fixedN}, <span className="text-[var(--color-txt2)] font-semibold">{trials} trials per point</span> (from Configure),
           1-week window per trial (fixed on this page so the sweep stays fast).

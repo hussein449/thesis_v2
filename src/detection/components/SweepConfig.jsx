@@ -230,18 +230,28 @@ export default function SweepConfig({
             max={100}
           />
           <NumberField
-            label="Ready threshold (%)"
-            value={params.readyThreshold}
-            onChange={(v) => setParam('readyThreshold', v)}
+            label="Battery safety margin (%)"
+            value={params.batterySafetyMargin}
+            onChange={(v) => setParam('batterySafetyMargin', v)}
+            hint="charge still in the pack on arrival at the dock"
             min={0}
-            max={100}
+            max={50}
           />
           <NumberField
-            label="Dock transit (s)"
-            value={params.dockTransitTime}
-            onChange={(v) => setParam('dockTransitTime', v)}
+            label="Battery swap at dock (s)"
+            value={params.dockSwapTime}
+            onChange={(v) => setParam('dockSwapTime', v)}
+            hint="land, swap pack, take off — leaves at 100%"
             min={0}
             max={600}
+          />
+          <NumberField
+            label="Docking stations"
+            value={params.dockCount}
+            onChange={(v) => setParam('dockCount', v)}
+            hint="spaced at (i+0.5)·L/n along the corridor"
+            min={1}
+            max={20}
           />
         </div>
       )}

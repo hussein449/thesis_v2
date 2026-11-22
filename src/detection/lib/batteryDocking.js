@@ -103,14 +103,18 @@ function getRiskModel() {
  */
 export function buildBatterySegments(M, mode, params = {}) {
   const P = { ...DEFAULT_PARAMS, ...params }
-  const raw =
-    mode === 'uniform'
-      ? buildPatrolSegments({ mode: 'uniform', corridorLengthM: CORRIDOR_LENGTH_M, M })
-      : buildPatrolSegments({
-          mode: 'risk-aware',
-          M,
-          ...getRiskModel(),
-        })
+  // One call for all three strategies. CCR-UAV works from the corridor
+  // length and its own 100 m grid rather than the 1 km sections, and it
+  // throws CcrInfeasibleError below its length cap — the caller is expected
+  // to catch that and report the fleet size as not applicable, which is why
+  // it is not swallowed here.
+  const raw = buildPatrolSegments({
+    mode: mode === 'uniform' || mode === 'ccr' ? mode : 'risk-aware',
+    corridorLengthM: CORRIDOR_LENGTH_M,
+    M,
+    ...getRiskModel(),
+    ccrParams: { v: SIM_PARAMS.droneSpeed, tMax: SIM_PARAMS.maxDetectionWindow },
+  })
 
   return raw.map((s) => {
     const aKm = s.A / 1000
@@ -373,13 +377,22 @@ export const DEFAULT_RHO_LIST = [0, 0.1, 0.2, 0.3, 0.4, 0.5]
 export function sweepReserveRatios({
   M,
   rhoList = DEFAULT_RHO_LIST,
-  modes = ['uniform', 'risk-aware'],
+  modes = ['uniform', 'risk-aware', 'ccr'],
   params = {},
 } = {}) {
   const rows = []
   for (const rho of rhoList) {
     for (const mode of modes) {
-      const res = simulateBatteryDocking({ M, rho, mode, params })
+      let res
+      try {
+        res = simulateBatteryDocking({ M, rho, mode, params })
+      } catch (err) {
+        if (err?.code !== 'CCR_INFEASIBLE') throw err
+        // CCR-UAV has no admissible partition at this fleet size. Emit no
+        // row rather than a zero one, so the charts leave a gap instead of
+        // showing a strategy that was never run as if it had failed.
+        continue
+      }
       rows.push({
         rho,
         mode,

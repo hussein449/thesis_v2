@@ -80,17 +80,34 @@ const CDF_TRIALS = 20
 const CDF_TOTAL_TIME = 7 * 86400
 
 function buildCDFData() {
-  const allTimes = { uniform: [], riskAware: [] }
+  const allTimes = {}
+  const unavailable = []
   const params = { ...DEFAULT_PARAMS, totalTime: CDF_TOTAL_TIME }
 
-  for (const pk of ['uniform', 'riskAware']) {
+  // CDF_N is 10 to match the manuscript's Figure 10, which is drawn at ten
+  // drones. CCR-UAV needs twelve on this corridor, so it is reported as not
+  // applicable here rather than silently dropped or run with its cap
+  // relaxed — which would no longer be the same strategy.
+  for (const pk of Object.keys(POLICIES)) {
     const allocation = POLICIES[pk].allocate(CDF_N)
     const trialParams = { ...params, patrolMode: POLICIES[pk].patrolMode ?? 'uniform' }
+    const times = []
+    let ok = true
     for (let t = 0; t < CDF_TRIALS; t++) {
-      const r = simulateOnce({ allocation, params: trialParams, seed: 7 + t * 53 })
-      allTimes[pk].push(...r.detectionTimes)
+      let r
+      try {
+        r = simulateOnce({ allocation, params: trialParams, seed: 7 + t * 53 })
+      } catch (err) {
+        if (err?.code !== 'CCR_INFEASIBLE') throw err
+        unavailable.push({ policy: pk, minimumFleet: err.minimumFleet })
+        ok = false
+        break
+      }
+      times.push(...r.detectionTimes)
     }
-    allTimes[pk].sort((a, b) => a - b)
+    if (!ok) continue
+    times.sort((a, b) => a - b)
+    allTimes[pk] = times
   }
 
   // Build CDF at regular tau steps (0 to maxDetectionWindow)
@@ -100,14 +117,14 @@ function buildCDFData() {
   for (let i = 0; i <= STEPS; i++) {
     const tau = (i / STEPS) * MAX_TAU
     const row = { tau: Math.round(tau) }
-    for (const pk of ['uniform', 'riskAware']) {
+    for (const pk of Object.keys(allTimes)) {
       const arr = allTimes[pk]
       const count = arr.filter((v) => v <= tau).length
       row[pk] = arr.length > 0 ? +(count / arr.length * 100).toFixed(1) : 0
     }
     data.push(row)
   }
-  return data
+  return { data, series: Object.keys(allTimes), unavailable }
 }
 
 function CustomTooltip({ active, payload, label, xLabel, xUnit = '', yUnit = '%' }) {
@@ -132,7 +149,8 @@ function CustomTooltip({ active, payload, label, xLabel, xUnit = '', yUnit = '%'
 
 export default function DetectionCDFPlots({ results }) {
   const pUnder2MinData = useMemo(() => buildPUnder2MinData(results), [results])
-  const cdfData = useMemo(() => buildCDFData(), [])
+  const { data: cdfData, series: cdfSeries, unavailable: cdfUnavailable } =
+    useMemo(() => buildCDFData(), [])
 
   const policies = Object.keys(results)
   const hasSweepResults = policies.length > 0
@@ -163,14 +181,12 @@ export default function DetectionCDFPlots({ results }) {
         <ResponsiveContainer width="100%" height={260}>
           <AreaChart data={cdfData} margin={{ top: 10, right: 20, left: 0, bottom: 36 }}>
             <defs>
-              <linearGradient id="gradUniform" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={POLICIES.uniform.color} stopOpacity={0.18} />
-                <stop offset="95%" stopColor={POLICIES.uniform.color} stopOpacity={0.0} />
-              </linearGradient>
-              <linearGradient id="gradRiskAware" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={POLICIES.riskAware.color} stopOpacity={0.18} />
-                <stop offset="95%" stopColor={POLICIES.riskAware.color} stopOpacity={0.0} />
-              </linearGradient>
+              {cdfSeries.map((pk) => (
+                <linearGradient key={pk} id={`grad-${pk}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={POLICIES[pk].color} stopOpacity={0.18} />
+                  <stop offset="95%" stopColor={POLICIES[pk].color} stopOpacity={0.0} />
+                </linearGradient>
+              ))}
             </defs>
             <CartesianGrid stroke={grid} strokeDasharray="3 3" />
             <XAxis
@@ -208,28 +224,29 @@ export default function DetectionCDFPlots({ results }) {
               strokeWidth={1.5}
               label={{ value: '2 min', position: 'top', fill: '#B45309', fontSize: 9 }}
             />
-            <Area
-              type="monotone"
-              dataKey="uniform"
-              name={POLICIES.uniform.label}
-              stroke={POLICIES.uniform.color}
-              fill="url(#gradUniform)"
-              strokeWidth={2}
-              dot={false}
-              connectNulls
-            />
-            <Area
-              type="monotone"
-              dataKey="riskAware"
-              name={POLICIES.riskAware.label}
-              stroke={POLICIES.riskAware.color}
-              fill="url(#gradRiskAware)"
-              strokeWidth={2}
-              dot={false}
-              connectNulls
-            />
+            {cdfSeries.map((pk) => (
+              <Area
+                key={pk}
+                type="monotone"
+                dataKey={pk}
+                name={POLICIES[pk].label}
+                stroke={POLICIES[pk].color}
+                fill={`url(#grad-${pk})`}
+                strokeWidth={2}
+                dot={false}
+                connectNulls
+              />
+            ))}
           </AreaChart>
         </ResponsiveContainer>
+
+        {cdfUnavailable.map((u) => (
+          <div key={u.policy} className="mt-2 text-[10px] text-[var(--color-txt3)]">
+            {POLICIES[u.policy]?.label ?? u.policy} is not shown: at N = {CDF_N} it
+            cannot satisfy its segment-length cap, which needs at least{' '}
+            {u.minimumFleet} UAVs on this corridor.
+          </div>
+        ))}
       </div>
 
       {/* ── P(Td < 2 min) vs N from sweep (if available) ── */}

@@ -315,10 +315,14 @@ export default function DetectionPage() {
               <p className="text-[11.5px] text-slate-400 leading-relaxed">
                 Compares{' '}
                 <span style={{ color: POLICIES.uniform.color }} className="font-semibold">Uniform</span>
-                {' '}versus{' '}
+                {', '}
                 <span style={{ color: POLICIES.riskAware.color }} className="font-semibold">Risk-aware</span>
+                {' and '}
+                <span style={{ color: POLICIES.ccr.color }} className="font-semibold">CCR-UAV</span>
                 {' '}drone allocation on the M51 Khalde→Awali corridor using Poisson accident arrivals,
                 back-and-forth patrol, and sensing-range detection.
+                CCR-UAV caps every segment at <em>v</em>·T<sub>max</sub>/2, so fleets below
+                that cap are reported as infeasible rather than run with the cap relaxed.
                 Configure the sweep below, then click <strong className="text-slate-300">Run sweep</strong> in the sidebar.
                 Results populate the analysis sections automatically.
               </p>
