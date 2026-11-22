@@ -33,7 +33,13 @@
  * sections S_i defined by sections.js. A patrol segment groups one or more
  * adjacent highway sections; sections are the unit of risk scoring and
  * accident generation, segments are the unit of UAV assignment.
+ *
+ * §6.3 adds a third strategy, CCR-UAV, which lives in ccr-uav.js because it
+ * optimises on its own 100 m grid instead of the 1 km sections the other two
+ * use. It is reached through buildPatrolSegments() like the others.
  */
+
+import { buildCcrSegments } from './ccr-uav'
 
 /**
  * §6.1 — Equal-length patrol segmentation.
@@ -194,18 +200,65 @@ export function buildRiskAwareSegments(sections, riskMatrix, M) {
 }
 
 /**
- * Top-level entry — pick uniform vs. risk-aware by `mode`.
+ * Thrown when CCR-UAV cannot satisfy its length cap with the fleet given.
  *
- *   mode:               'uniform' | 'risk-aware'
- *   corridorLengthM:    total road length in meters (used by uniform)
+ * §6.3 requires an infeasible configuration to be REPORTED as infeasible
+ * rather than silently relaxed: a sweep should catch this, mark that fleet
+ * size as not applicable for CCR-UAV, and keep the uniform / risk-aware
+ * results at the same point. Falling back to a relaxed partition would
+ * compare a different algorithm under the same name.
+ */
+export class CcrInfeasibleError extends Error {
+  constructor(reason, minimumFleet, M) {
+    super(
+      `CCR-UAV infeasible at M = ${M}: ${reason}. `
+      + `At least ${minimumFleet} UAVs are needed to respect the `
+      + 'segment-length cap.'
+    )
+    this.name = 'CcrInfeasibleError'
+    this.code = 'CCR_INFEASIBLE'
+    this.reason = reason
+    this.minimumFleet = minimumFleet
+    this.M = M
+  }
+}
+
+/**
+ * Top-level entry — pick uniform vs. risk-aware vs. CCR-UAV by `mode`.
+ *
+ *   mode:               'uniform' | 'risk-aware' | 'ccr'
+ *   corridorLengthM:    total road length in meters (uniform and ccr)
  *   M:                  number of UAVs
  *   sections:           required for 'risk-aware'
  *   riskMatrix:         required for 'risk-aware'
+ *   ccrParams:          optional { dx, v, rIot, tMax } for 'ccr'; the caller
+ *                       should pass the simulation's own speed and detection
+ *                       window so the length cap L_max = v*T_max/2 tracks the
+ *                       settings actually being run, not the defaults.
+ *
+ * 'ccr' reads crash rates straight from the fitted rate table rather than
+ * from `sections` / `riskMatrix`, because it optimises on a 100 m grid
+ * rather than the 1 km sections the other two strategies use.
  */
-export function buildPatrolSegments({ mode, corridorLengthM, M, sections, riskMatrix }) {
+export function buildPatrolSegments({
+  mode, corridorLengthM, M, sections, riskMatrix, ccrParams,
+}) {
   if (mode === 'uniform') return buildUniformSegments(corridorLengthM, M)
   if (mode === 'risk-aware' || mode === 'riskAware') {
     return buildRiskAwareSegments(sections, riskMatrix, M)
+  }
+  if (mode === 'ccr' || mode === 'ccrUav') {
+    const { segments, ccr } = buildCcrSegments({
+      corridorLengthM, M, params: ccrParams ?? {},
+    })
+    if (!ccr.feasible) {
+      throw new CcrInfeasibleError(ccr.reason, ccr.minimumFleet, M)
+    }
+    // Carry the solver's metadata on the array so callers can reach the
+    // surrogate objective and the cap that produced it, while the array
+    // itself keeps the same shape as the other two strategies.
+    segments.ccr = ccr
+    return segments
   }
   throw new Error(`Unknown patrol mode: ${mode}`)
 }

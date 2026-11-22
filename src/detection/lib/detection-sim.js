@@ -465,6 +465,11 @@ export function simulateOnce({ allocation, params, seed }) {
           M: nDrones,
           sections: model.sections,
           riskMatrix: model.riskMatrix,
+          ccrParams: {
+            v: P.droneSpeed,
+            rIot: P.sensingRange,
+            tMax: P.maxDetectionWindow,
+          },
         })
       : []
     // Build drone-state pool. Each segment may carry droneCount ≥ 1
@@ -751,6 +756,11 @@ export function simulateWithDispatch({ allocation, params, seed, dispatchRule = 
           M: nDrones,
           sections: model.sections,
           riskMatrix: model.riskMatrix,
+          ccrParams: {
+            v: P.droneSpeed,
+            rIot: P.sensingRange,
+            tMax: P.maxDetectionWindow,
+          },
         })
       : []
     // Build drone-state pool. Each segment may carry droneCount ≥ 1
@@ -888,6 +898,11 @@ export function simulateDetailedLog({ allocation, params, seed, sampleInterval =
           M: nDrones,
           sections: model.sections,
           riskMatrix: model.riskMatrix,
+          ccrParams: {
+            v: P.droneSpeed,
+            rIot: P.sensingRange,
+            tMax: P.maxDetectionWindow,
+          },
         })
       : []
     // Stacked drones get phase-offset positions + alternating directions.
@@ -1041,6 +1056,11 @@ export function simulateBatteryTrace({ allocation, params, seed, sampleInterval 
       M: nDrones,
       sections: model.sections,
       riskMatrix: model.riskMatrix,
+      ccrParams: {
+        v: P.droneSpeed,
+        rIot: P.sensingRange,
+        tMax: P.maxDetectionWindow,
+      },
     })
     // Walk segments; respect droneCount for stacking. Stagger initial
     // battery across the *global* drone index so all stacked drones in
@@ -1131,6 +1151,11 @@ export function simulateDroneTrajectories({ allocation, params, seed, sampleInte
       M: nDrones,
       sections: model.sections,
       riskMatrix: model.riskMatrix,
+      ccrParams: {
+        v: P.droneSpeed,
+        rIot: P.sensingRange,
+        tMax: P.maxDetectionWindow,
+      },
     })
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i]
