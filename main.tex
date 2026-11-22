@@ -1195,8 +1195,50 @@ factor of two. Section~\ref{sec:discussion} returns to this.
 
 
 These three checks use the same data on which the model was fitted and therefore assess in-sample agreement rather than predictive performance.
-A separate chronological holdout validation is presented in
-Section~\ref{sec:holdout_validation}.
+
+\paragraph{Out-of-Sample Check.}
+\label{sec:holdout_validation}
+To test prediction rather than fit, the panel was split chronologically: the
+model was refitted on the first 21 months (735 cells, 740 crashes) and scored
+on the last 10 (350 cells, 412 crashes), which it had never seen.
+Table~\ref{tab:holdout} compares it with the expert score it replaces and with
+four simpler estimators. The fitted model predicts the held-out cells with a
+mean absolute error of 0.81 crashes and a rank correlation of 0.85. The expert
+score manages 1.25 and $-0.116$: on data it was not tuned to it carries
+essentially no information about where crashes fall, which is the clearest
+evidence in this study for replacing it.
+
+Two qualifications belong with that result. A plain table of empirical
+region--slot rates, with no covariates at all, scores marginally better than
+the fitted model (0.79 against 0.81). That is less a competing method than a
+confirmation that smoothing the rates through the model costs nothing: the
+model earns its place by being transferable to other roads and interpretable,
+not by beating its own rate table. And every estimator under-predicts the
+held-out total, 341 against 412 observed for the Poisson model, because
+crashes rose over the study period faster than the seasonal terms allow.
+
+\begin{table}[htbp]
+\centering
+\caption{Chronological holdout. Every estimator is fitted on 2016-01 to
+2017-09 and scored on 2017-10 to 2018-07, 350 region--month--slot cells
+holding 412 crashes. MAE and RMSE are per cell; $\rho$ is the Spearman rank
+correlation with the observed counts.}
+\label{tab:holdout}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Estimator} & \textbf{Parameters} & \textbf{MAE} & \textbf{RMSE} & $\rho$ \\
+\midrule
+Poisson (this paper)        &  8 & 0.812 & 1.129 & 0.849 \\
+Negative binomial           &  9 & 0.810 & 1.128 & 0.849 \\
+Region $\times$ slot rates  & 35 & \textbf{0.789} & \textbf{1.098} & 0.843 \\
+Region rates                &  7 & 0.815 & 1.129 & 0.829 \\
+Slot rates                  &  5 & 1.001 & 1.345 & 0.372 \\
+Flat rate                   &  1 & 1.033 & 1.373 & 0.259 \\
+Expert score                &  1 & 1.250 & 1.626 & $-0.116$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \paragraph{Checks on the Simulator.}
 We also checked that the simulator produces what the rates say. Across the 550
