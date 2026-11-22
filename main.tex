@@ -19,6 +19,14 @@
 \usepackage{pgfplots}
 \usepackage{enumitem}
 \usepackage[hidelinks]{hyperref}
+\usepackage{tabularx}
+\usepackage{authblk}
+
+\setcounter{Maxaffil}{0}
+\renewcommand\Authfont{\normalsize\bfseries}
+\renewcommand\Affilfont{\small\itshape}
+\setlength{\affilsep}{0.5em}
+
 
 \pgfplotsset{compat=1.18}
 \usetikzlibrary{arrows.meta,positioning,calc}
@@ -40,57 +48,71 @@
 \definecolor{boxModel}{RGB}{219,226,247}
 \definecolor{boxSim}{RGB}{222,240,224}
 
-\title{Risk-Driven UAV Swarm Patrol for Fast Road Accident Detection
-on the M51 Corridor, Lebanon}
+\title{Risk-Driven Drone Swarm Patrol for Rapid Road Accident Alerts:
+The Khaldeh--Awali Highway Case Study in Lebanon}
 
-\author{%
-  Hussein Nasereddine$^{1}$, Walid Chaar$^{2}$, and Ali Kalakech$^{3}$\\[6pt]
-  {\small $^{1}$Independent Research Engineer, Beirut, Lebanon}\\
-  {\small $^{2}$Research Department, Novum Research, Beirut, Lebanon}\\
-  {\small $^{3}$Engineering Department, Lebanese International University, Beirut, Lebanon}\\
-  {\small Corresponding author: husseinnaserddine21@gmail.com}}
 
-\date{Version 1.0, September 2026}
+
+
+
+\author[1]{Hussein Nasereddine}
+\author[1]{Ali Kalakech\thanks{Corresponding author:
+\texttt{ali.kalakech@liu.edu.lb}}}
+\author[2]{Ghaleb Faour}
+\author[1]{Amin Haj Ali}
+\author[3]{Walid Al-Shaar}
+\author[1]{Majd Ghareeb}
+\author[1]{Ali Bazzi}
+
+\affil[1]{Computer and Communication Engineering Department,
+School of Engineering, Lebanese International University,
+Beirut, Lebanon}
+
+\affil[2]{National Center for Remote Sensing,
+National Council for Scientific Research of Lebanon
+(CNRS-L), Beirut, Lebanon}
+
+\affil[3]{Novum Research and Innovation Group,
+Beirut, Lebanon}
+
+\date{}
+
 
 \begin{document}
 \maketitle
 
 % ===========================================================================
 \begin{abstract}
-\noindent
-When a crash happens on a motorway without automatic incident detection, help
-can only start once someone reports it. This paper studies how a swarm of
-patrol drones can detect crashes faster on the 28.6~km Khalde--Awali section of
-the M51 motorway in Lebanon, and where along the road the drones should fly.
-IoT sensors are mounted on the guardrail along the side of the road. When a
-crash happens, the sensor at the crash site sends a short-range radio alert,
-and a drone detects the crash when its patrol brings it within range of that
-alert. To decide where the drones should patrol, we built a crash-rate model
-from two main datasets: 1{,}152 ambulance-attended crashes recorded by the
-Lebanese Red Cross over 31 months (2016--2018), and GPS traffic data from the
-\emph{tari2ak} smartphone application, obtained through a collaboration with
-the National Council for Scientific Research in Lebanon (CNRS-L). The ambulance records give only the
-name of a town, not an exact location, so we modelled crashes in seven road
-regions and five time slots per day and fitted a Poisson regression with an
-exposure offset to 1{,}085 region--month--time-slot cells. The model gives the
-expected number of crashes per kilometre per hour for each region and time
-slot. Roadside activity, measured as roadside landmarks per kilometre, is the
-strongest risk factor (rate ratio 3.84), and the predicted regional crash
-totals agree closely with the observed ones (correlation 0.990). A simulator
-uses these rates to create crashes and to divide the road among the drones so
-that each drone covers the same expected number of crashes. Over 50 simulated
-30-day periods per fleet size, this risk-aware plan cut the average alert time
-with ten drones from 177~s to 140~s compared with equal-length segments, and
-detected 80\% of crashes within two minutes with about 19 drones instead of
-about 21. It also has a cost: it left a long, quiet stretch in the south that
-one drone could not cover in time, so with 13 drones it missed 7.7\% of
-crashes while equal-length segments missed none. All detection results come
-from simulation; no field trials have been run yet.
+Rapid road-accident notification is essential for effective emergency response.
+However, translating geographically varying accident risks into efficient UAV
+patrol allocation remains challenging, as prioritizing high-risk areas may
+compromise coverage elsewhere. This paper proposes a risk-driven drone swarm
+patrol framework that integrates statistical crash-frequency modelling with UAV
+allocation. Roadside Internet of Things (IoT) sensors are assumed to generate
+crash alerts, which patrolling drones receive upon entering communication
+range. The framework allocates patrol resources according to expected crash
+frequencies rather than uniform road lengths.
+
+The framework is evaluated through a case study of the 28.6~km Khaldeh--Awali
+highway in Lebanon. A Poisson crash-frequency model was fitted using 1{,}152
+ambulance-attended crashes recorded over 31 months (2016--2018) and GPS traffic
+measurements. The dataset comprises 1{,}085 observations across seven road
+regions and five daily time slots. Roadside activity provided the largest
+improvement in model fit, while predicted regional crash totals showed strong
+in-sample agreement with observations (correlation 0.990).
+
+Across 50 simulated 30-day periods per fleet size, risk-aware allocation
+reduced the average alert-reception time among detected crashes from 177 to
+140~s with ten drones. It also achieved a two-minute alert for 80\% of crashes
+using approximately 19 drones instead of 21. However, with 13 drones,
+risk-aware allocation missed 7.7\% of crashes within the 600~s detection window,
+compared with none under uniform allocation, because of excessively long patrol
+segments in lower-risk regions. These simulation-based findings highlight the
+trade-off between rapid alert acquisition and geographical coverage.
 \end{abstract}
 
-\noindent\textbf{Keywords:} UAV swarm; road accident detection; crash-frequency
-model; Poisson regression; patrol allocation; IoT alert; guardrail sensor;
-Lebanon
+\noindent\textbf{Keywords:} UAV swarm; road accident detection;
+crash-frequency modelling; risk-aware patrol allocation
 
 % ===========================================================================
 \section{Introduction}
@@ -131,20 +153,16 @@ how quickly will the first one hear the alert?
 Any system of this kind must decide where to put its drones. To do this, it
 needs a model of where and when crashes happen.
 
-In practice, most systems use an expert score. Traffic, road curves and merging
-are each given a small score, such as 0, 1 or 2, by hand. The scores are then
-added together using weights that the analyst chooses, and the result is called
-``risk''. Such a score has three serious problems. It has no units, so scores
-on different roads cannot be compared. It cannot be checked, because nothing
-you can measure on the road corresponds to a score of 1.4. And it says nothing
-about how many crashes happen, only which places are riskier than others, so
-the yearly number of crashes has to be assumed separately.
+Expert-weighted multicriteria approaches have been used to assess and rank accident-prone road sections \cite{yakar2021}.
+Although these approaches can be evaluated against observed accident records, their resulting risk scores do not directly quantify expected crash frequency without additional calibration. Statistical crash-frequency models provide an alternative by estimating expected crash counts from observed data while accounting for exposure and relevant road and traffic characteristics \cite{lordmannering2010}.
+In this study, we adopt the latter approach to obtain quantitative crash rates that can be directly integrated into UAV patrol allocation.
 
-Research on drones has the opposite gap. Studies of multi-robot patrolling are
-advanced, but they usually assume that every point on the route is equally
-important~\cite{elmaliach2009,portugal2011}. Reviews of drones in road safety
-describe many uses, but rarely explain the model that decides where the drones
-actually go~\cite{outay2020,menouar2017}.
+Classical multi-robot patrolling research has examined coverage frequency
+and revisit-time requirements~\cite{elmaliach2009,portugal2011}.
+UAV-based transportation studies have also investigated a wide range of
+monitoring applications~\cite{outay2020,menouar2017}.
+The present work focuses on integrating locally estimated crash frequencies
+into continuous multi-UAV highway patrol allocation.
 
 \textbf{The gap this paper addresses} lies between these two areas. We ask what
 changes in a drone patrol system when the hand-made risk score is replaced by a
@@ -173,19 +191,22 @@ replaces an expert score in a working patrol simulator, do the drones fly
 differently? And does this change help detection, both on average and in the
 worst case?
 
+
 \subsection{Main Contribution}
 
-This study makes four contributions: (i) a complete description of a drone
-swarm system for crash detection whose risk model is a fitted crash rate, not
-a score, including every step that turns the model's output into patrol
-segments; (ii) evidence that, on this road, roadside activity matters more than
-road shape, and that the resulting pattern of risk is the opposite of what the
-expert score assumed; (iii) a fair comparison of two patrol plans at the real
-crash rate of the road, reporting both the average result and the worst case;
-and (iv) a clear negative result: the risk-aware plan improves the average and
-the two-minute target, but misses more crashes for some fleet sizes, because
-it gives each drone an equal number of crashes rather than an equal length of
-road.
+The main contribution of this study is a data-driven methodology for planning and evaluating multi-UAV road accident alerting systems under limited data availability. Rather than proposing a new statistical model or relying on precise accident locations, the methodology demonstrates how available historical observations can support UAV patrol decisions while accounting for the limitations of the resulting risk estimates.
+
+Specifically, this study makes four contributions:
+
+(i) \textbf{Empirical data integration:} Historical accident records from the Lebanese Red Cross are integrated with GPS-derived traffic observations from CNRS-L and road characteristics to construct a dataset covering 1,152 crashes over 31 months. Despite the limited spatial resolution of the accident records, this integration provides a quantitative foundation for regional and temporal crash-risk estimation.
+
+(ii) \textbf{Risk estimation and validation:} An exposure-adjusted Poisson regression model is used to estimate crash frequencies, replacing the previous expert-based scoring approach. Its predictive performance and limitations are examined through chronological out-of-sample validation and comparison with alternative risk estimators.
+
+(iii) \textbf{Comparative evaluation of UAV allocation strategies:} Three strategies—uniform, risk-aware, and coverage-constrained risk-aware (CCR-UAV)—are evaluated to investigate the trade-off between alert-reception delay, risk prioritization, and geographical coverage. Particular attention is given to the limitations of purely risk-driven allocation, which may improve average detection times while leaving lower-risk regions inadequately covered.
+
+(iv) \textbf{Operational applicability:} The study examines the effects of fleet size, battery constraints, docking operations, and spare UAV availability on alerting performance, providing insights into the practical deployment of multi-UAV patrol systems.
+
+Overall, the study demonstrates how limited historical data can support UAV patrol planning while highlighting the importance of coverage constraints when risk estimates are uncertain or spatially imprecise.
 
 \subsection{Overview of Methodology}
 
@@ -264,40 +285,38 @@ crash-site work~\cite{outay2020}. Mozaffari et al.\ explain how drones
 communicate in wireless networks~\cite{mozaffari2019}, and Erdelj et al.\
 describe how drones support disaster response~\cite{erdelj2017}.
 
+
+Recent research in smart-city environments has further examined the use of UAVs for monitoring, connectivity, and data collection. Dubravova et al. \cite{dubravova2024}
+reviewed drone applications in urban transportation, emergency management, and security. Popescu et al. \cite{popescu2022} investigated UAV-assisted connectivity
+for vehicular networks, while Aziz et al. \cite{aziz2026} proposed an energy-efficient UAV trajectory planning approach for collecting data from distributed IoT sensors. Unlike these studies, the present work integrates a statistically fitted road-crash frequency model with risk-driven multi-UAV patrol allocation, evaluating both accident-alert reception time and missed-accident probability.
+
+
 The alert itself also has a body of research. LoRa is a low-power, long-range
 radio often used for small battery-powered sensors. Field tests measured ranges
 of a few kilometres in towns and about 15~km in open land~\cite{petajajarvi2015}.
-Several prototypes connect a motion or tilt sensor to a LoRa radio to send an
-automatic crash alert~\cite{vinodhini2025}. In our system, the sensors are
+LoRa-based accident-detection systems have also been investigated, including
+approaches combining ultrasonic sensing with long-range wireless communication~\cite{vinodhini2025}. In our system, the sensors are
 fixed to the roadside guardrail, and the drones act as moving receivers that
 pick up the alert as they fly past.
 
 \subsection{Research Gaps}
 
-Three gaps motivate this work.
+Three research challenges motivate this work.
 
-\textbf{First, drone patrol systems rarely explain their risk model.} Papers
-describe the patrol method in detail but the risk weights in a sentence. They
-rarely say where the weights come from or whether they match real crash counts.
+First, translating historical crash records into operational risk estimates remains challenging when precise accident coordinates are unavailable. In our case, ambulance records identify the town in which a crash occurred rather than its exact location.
+This requires estimating crash frequencies at the regional level while accounting for road length, observation time, and traffic conditions.
 
-\textbf{Second, crash records without exact locations are rarely studied.} Most
-crash studies assume that every crash can be placed on a map. When records come
-from ambulance dispatch rather than police reports, the location may be only
-the name of a town. There are few methods for this case, and the usual answer,
-an expert score, is rarely compared with a fitted model.
+Second, although UAV-based transportation monitoring and trajectory planning have been extensively studied \cite{outay2020,menouar2017,aziz2026}, the integration
+of locally fitted crash-frequency models into continuous multi-UAV highway patrol allocation deserves further investigation. In particular, it is important to
+establish how allocating patrol resources according to expected crash frequency compares with a uniform spatial allocation.
 
-\textbf{Third, patrol studies report averages.} Most studies report the average
-detection time. A plan that puts more drones on busy stretches can improve the
-average while leaving a quiet stretch almost unwatched, and the average does
-not show this.
+Third, improving average alert-reception time does not necessarily guarantee adequate coverage of the entire road. Concentrating UAV resources in high-risk regions
+may leave lower-risk regions with excessively long revisit intervals. Therefore, both early detection performance and missed-accident probability must be evaluated when assessing risk-driven patrol strategies.
+
 
 \subsection{Positioning of the Present Study}
 
-This study connects crash modelling with the planning of patrol resources. It
-does not propose a new statistical method or a new patrol algorithm. Its aim is
-to link the two with a documented and checked crash-rate model, and to report
-openly what this link gains and what it costs.
-
+This study bridges crash-frequency modelling and multi-UAV patrol planning in environments where historical accident data are limited or spatially imprecise. By integrating heterogeneous data sources, the proposed methodology translates empirical crash-risk estimates into operational patrol strategies and evaluates their performance under realistic coverage and fleet constraints. Rather than focusing on the development of a new statistical model, the study investigates the benefits and limitations of data-driven resource allocation through a comparative assessment of uniform, risk-aware, and coverage-constrained risk-aware patrol strategies. Particular attention is given to the trade-off between reducing accident-alert reception time and maintaining reliable geographical coverage.
 % ===========================================================================
 \section{Materials and Methods}
 
@@ -314,10 +333,10 @@ end point.
 
 The road has two to three lanes in each direction and a speed limit of 80~km/h.
 The speed below which 85\% of drivers travel ranges from 79.4 to 113.4~km/h.
-About 200{,}000 vehicles a day enter Greater Beirut through the southern
-entrance at Khalde~\cite{worldbank2017}. Traffic drops further south as cars
-leave at the exits, giving an average of about 90{,}000 vehicles a day along
-the study road. Access to the road is poorly controlled: nineteen interchanges
+Approximately 200{,}000 vehicles per day travel along critical sections
+of the southern highway serving Greater Beirut~\cite{worldbank2017}.
+Traffic volumes vary along the study corridor as vehicles enter and
+leave through its interchanges. Access to the road is poorly controlled: nineteen interchanges
 and many small entrances serve roadside shops, fuel stations and beach resorts,
 so cars often travel at very different speeds. A curated inventory found 56
 roadside landmarks, spread very unevenly: 26 in Khalde and none in Jadra.
@@ -659,8 +678,7 @@ term, because it simply followed the calendar (0.288 of hours wet in January,
 0.008 in August). With the seasonal terms included, its rate ratio was 1.008,
 meaning no effect. \\
 Roadside activity weighted by distance & It needed four settings that could not
-be measured on this road, and 40 of the 56 landmarks had no review data. The
-simple landmark count did better in 7 of 8 tests where one region was left out. \\
+be measured on this road, and 40 of the 56 landmarks had no review data. \\
 Roadside activity by time slot & It fell to almost zero at night, just like
 traffic. It repeated the time-of-day pattern that traffic already carries, and
 made the traffic term change sign. \\
@@ -687,8 +705,10 @@ R_{rb}=\frac{\sum_m \hat{\mu}_{rmb}}{\sum_m E_{rmb}}
 \label{eq:aggregate}
 \end{equation}
 
-Because we average over whole years, the yearly cycle cancels out, so $R_{rb}$
-is an average for the whole year.
+%Because we average over whole years, the yearly cycle cancels out, so $R_{rb}$ is an average for the whole year.
+
+The fitted rates are aggregated over the 31-month observation period and divided by the corresponding total exposure. Equation~\eqref{eq:aggregate} therefore provides an exposure-weighted average crash rate for each region and time slot over the study period. Seasonal variations are incorporated into this average rather than explicitly represented in the subsequent simulation.
+
 
 The simulator divides the road into 1~km sections, which gives 29 sections. The
 region borders do not fall on whole kilometres, so six of the 29 sections lie
@@ -724,12 +744,9 @@ time $\tau$ inside the slot and a random position $s$ inside the section. Every
 section and slot is drawn on its own. The simulator is never told the yearly
 total. It simply comes out of the rates.
 
-\subsection{The UAV Swarm and Its Allocation}
+\subsection{Multi-UAV Patrol and Allocation}
 
-The swarm has $M$ identical drones. Each drone is given one patrol segment
-$[A_j,B_j]$ of the road and flies back and forth along it at a constant speed
-$v$. We compare two ways of building the segments.
-
+The system has $M$ identical UAVs. Each UAV is assigned one patrol segment $[A_j,B_j]$ of the road and flies back and forth along it at a constant speed $v$. We compare three allocation strategies: uniform, risk-aware, and coverage-constrained risk-aware (CCR-UAV).
 \paragraph{Uniform.}
 The road of length $L$ is cut into $M$ equal pieces, with $A_j=(j-1)L/M$ and
 $B_j=jL/M$. This plan uses no risk information. It is the baseline.
@@ -739,12 +756,7 @@ The 1~km sections are grouped so that each drone has about the same expected
 number of crashes. The daily crash load of section $i$ is
 $\rho_i=\sum_b\lambda_{ib}$, and the target for each drone is
 $\bar{\rho}=\sum_i\rho_i/M$. Starting from the northern end, sections are added
-to a segment until its load reaches the target. The section at the border goes
-to whichever side ends up closer to the target, and the last segment takes
-whatever is left. When there are more drones than sections, the extra drones
-are shared among the busiest segments using Hamilton's largest-remainder
-method~\cite{balinski1982}. Drones that share a segment start at evenly spaced
-points and fly in opposite directions, so that they do not fly side by side.
+to a segment until its load reaches the target. The section at the border goes to whichever side ends up closer to the target, and the last segment takes whatever is left. When there are more drones than sections, the extra drones are shared among the busiest segments using Hamilton's largest-remainder method~\cite{balinski1982}. Drones that share a segment start at evenly spaced points and fly in opposite directions, so that they do not fly side by side.
 
 Equal crash load is not the same as equal length.
 Figure~\ref{fig:partition} shows the two plans with five drones.
@@ -780,22 +792,33 @@ Figure~\ref{fig:partition} shows the two plans with five drones.
 }
 \node[below,font=\small] at (14.3,-1.65) {Distance along the road (km)};
 \end{tikzpicture}
-\caption{The two patrol plans with five drones. Dashed lines are region
-borders, and each numbered box is one drone's patrol segment. The uniform plan
-gives every drone 5.72~km. The risk-aware plan gives every drone about the same
-number of expected crashes, so two drones share the first 6~km and one drone
+\caption{The two patrol plans with five drones. Dashed lines are region borders, and each numbered box is one drone's patrol segment. The uniform plan gives every drone 5.72~km. The risk-aware plan gives every drone about the same number of expected crashes, so two drones share the first 6~km and one drone
 covers the last 13.6~km.}
 \label{fig:partition}
 \end{figure}
 
+\paragraph{Coverage-constrained risk-aware (CCR-UAV).}
+
+The risk-aware strategy may assign excessively long patrol segments to regions with low estimated crash frequencies, increasing the risk of prolonged accident detection delays. CCR-UAV addresses this limitation by combining risk-based allocation
+with a geographical coverage constraint. Each patrol segment must satisfy
+
+\begin{equation}
+B_j-A_j \leq L_{\max}=\frac{vT_{\max}}{2},
+\label{eq:ccr_length}
+\end{equation}
+
+where $T_{\max}$ is the maximum alert-reception window. For $v=8$~m/s
+and $T_{\max}=600$~s, the maximum segment length is 2.4~km.
+
+Under uninterrupted back-and-forth patrol, this constraint ensures
+that every point along a segment is revisited within $T_{\max}$.
+
 \subsection{Detection through the IoT Alert}
 \label{sec:detection}
 
-Detection is modelled as a radio signal, not a camera image. The IoT sensors
-are mounted on the guardrail, the metal crash barrier that runs along the side
-of the road, so they sit right next to the traffic and need no extra poles or
-roadworks. When a crash happens at position $s_k$, the guardrail sensor at
-that point sends an alert. Any drone inside the \emph{alert zone}
+
+In this study, detection time refers to the delay between a crash and the first reception by a patrolling UAV of an alert generated by a guardrail-mounted IoT sensor. The UAV does not independently detect the crash using onboard sensors or image processing.
+The IoT sensors are mounted on the guardrail, the metal crash barrier that runs along the side of the road, so they sit right next to the traffic and need no extra poles or roadworks. When a crash happens at position $s_k$, the guardrail sensor at that point sends an alert. Any drone inside the \emph{alert zone}
 $[s_k-R_{\mathrm{IoT}},\,s_k+R_{\mathrm{IoT}}]$ receives it at once. The drones
 do not change course when a crash happens: the alert time is simply how long
 their normal patrol takes to bring one of them into the alert zone.
@@ -871,38 +894,37 @@ measurements from it.
 
 \subsection{Operational Layer}
 
-Real drones cannot fly forever, so the simulator includes batteries. A
-patrolling drone uses 2\% of its battery per minute, which gives about 50
-minutes of flight. When the battery drops below 25\%, the drone leaves its
-segment, flies to a dock (60~s), recharges, and returns once it is above 80\%.
-While it is away, its segment has no drone unless a spare drone takes its
-place. A pool of $\max(2,\lceil M/8\rceil)$ spare drones fills these gaps after
-a 30~s delay. These rules decide whether a fleet of $M$ drones really has $M$
-drones in the air. At the start of each trial, every drone begins at a random
-point of its segment, in a random direction, with a battery level between 60\%
-and 100\%.
+The simulator assumes a constant battery discharge rate of 2\% per minute during flight, including patrolling and travelling to and from docking stations. This corresponds to a nominal flight endurance of 50 minutes, consistent with the maximum flight times reported by DJI (Matrice 350 RTK, 55 minutes) and Autel Robotics (EVO Max 4T, 42 minutes) at approximately 8~m/s under
+windless conditions.
+
+When a UAV approaches its battery reserve threshold, it temporarily leaves its patrol segment for battery replacement at a docking stationbefore resuming its patrol.
+
+To support continuous patrol operations, the simulation considers
+battery replacement at docking stations rather than conventional
+battery recharging. Automated docking and battery exchange systems have been investigated in previous studies, demonstrating the feasibility of rapid battery replacement and subsequent mission resumption~\cite{blaha2023droneport,vilkki2024battery}.
+Under the considered operational model, UAVs periodically leave
+their assigned patrol segments, travel to docking stations, exchange their depleted batteries for fully charged ones, and resume patrol.
+Spare UAVs may temporarily replace departing UAVs to reduce
+interruptions in geographical coverage.
 
 \subsection{Experimental Design and Metrics}
+The initial experiment compares uniform and risk-aware UAV allocation.
+Table~\ref{tab:params} lists the simulation settings used for this comparison.  Each trial covers 30
+simulated days in steps of 5~s, at the road's real fitted crash rate. The crash rate was not artificially increased. A fleets size of $M\in\{1,2,3,5,7,10,13,16,20,25,30\}$ UAVs were evalulated, with 50 trials for each fleet size and each plan. This gives about 1{,}800 crashes behind every point in the
+results. For each trial and fleet size, both plans face \emph{exactly the same} crashes, because crashes are created by their own random number generator, separate from the one used to place the drones. The runs can be repeated exactly: the random seed for trial $t$ is $42+1009\,t+7919\,M$.
 
-Table~\ref{tab:params} lists the simulation settings. Each trial covers 30
-simulated days in steps of 5~s, at the road's real fitted crash rate. We did
-not increase the crash rate to get more events. We tested fleets of
-$M\in\{1,2,3,5,7,10,13,16,20,25,30\}$ drones, with 50 trials for each fleet
-size and each plan. This gives about 1{,}800 crashes behind every point in the
-results. For each trial and fleet size, both plans face \emph{exactly the same}
-crashes, because crashes are created by their own random number generator,
-separate from the one used to place the drones. The runs can be repeated
-exactly: the random seed for trial $t$ is $42+1009\,t+7919\,M$.
-
-We report three results. The \emph{average alert time} is the mean time to
-detection over the crashes that were detected. The \emph{two-minute share},
-$P(T\le 120\,\mathrm{s})$, is the share of \emph{all} crashes detected within
-two minutes, so missed crashes count against it. The \emph{missed share} is
-the share of crashes not detected within the 600~s window.
+Three performance metrics are reported. The \emph{average alert time} is the mean time to detection over the crashes that were detected. The \emph{two-minute detection rate}, $P(T\leq 120\,\mathrm{s})$, represents the percentage of accidents detected within two minutes of their occurrence. The \emph{10-minute exceedance rate} is the proportion of accidents not detected within 600 s.
 
 \begin{table}[htbp]
 \centering
-\caption{Simulation settings.}
+\caption{Simulation settings for the initial comparison
+between uniform and risk-aware allocation. Batteries are swapped at the dock
+rather than charged in place, so the dwell is a fixed handling time and a UAV
+leaves at 100\%. The five docking stations sit at $(i+\tfrac{1}{2})L/5$ along
+the corridor, so the ferry a UAV pays depends on where it is, at most
+2.86~km. A UAV leaves patrol at whichever level is higher: the 25\% nominal
+threshold, or the charge needed to reach the nearest dock plus a 5\% margin,
+so none is scheduled to arrive empty.}
 \label{tab:params}
 \small
 \begin{tabular}{@{}llll@{}}
@@ -910,10 +932,10 @@ the share of crashes not detected within the 600~s window.
 \textbf{Setting} & \textbf{Value} & \textbf{Setting} & \textbf{Value} \\
 \midrule
 Time step $\Delta t$        & 5 s     & Battery use              & 2\%/min \\
-Trial length                & 30 days & Return-to-dock level     & 25\% \\
-Trials per point            & 50      & Ready-to-fly level       & 80\% \\
-Drone speed $v$             & 8 m/s   & Flight to dock           & 60 s \\
-Alert range $R_{\mathrm{IoT}}$ & 200 m & Charging               & 0 to 100\% in 240 s \\
+Trial length                & 30 days & Return-to-dock level     & $\max(25\%,\ \text{dock}+5\%)$ \\
+Trials per point            & 50      & Battery swap at dock     & 120 s \\
+Drone speed $v$             & 8 m/s   & Docking stations         & 5, evenly spaced \\
+Alert range $R_{\mathrm{IoT}}$ & 200 m & Worst case to a dock     & 2.86 km \\
 Detection window            & 600 s   & Spare drones             & $\max(2,\lceil M/8\rceil)$ \\
 Section size                & 1 km (29 sections) & Spare drone delay & 30 s \\
 Trial start time            & 08:00   & Crash rate               & fitted, not increased \\
@@ -921,16 +943,19 @@ Trial start time            & 08:00   & Crash rate               & fitted, not i
 \end{tabular}
 \end{table}
 
-\subsection{Implementation}
+\subsection{Simulation Environment}
 \label{sec:impl}
 
 The model was fitted in Python with statsmodels~\cite{seabold2010}. An export
-script, kept with the data panel and not part of the public repository, refits
+script, \texttt{scripts/validation/export\_risk\_table.py}, refits
 the model and writes the rate table to one file
 (\texttt{risk-table.json}), together with the formula, the coefficients and the
 leftover spread, so that every rate can be traced back to the fit. The script
 stops with an error if the yearly total from the table differs from the
-observed total by more than one crash.
+observed total by more than one crash. It is included in the repository so
+that the fitting procedure can be inspected, but it cannot be run as supplied:
+it reads the crash panel, which is restricted and therefore not distributed
+with the code (see Data Availability).
 
 The simulator is part of a web application, the Simulation-Aided Command
 Center, written in JavaScript with React, and it runs fully in the web
@@ -938,14 +963,19 @@ browser. It uses a seeded random number generator (mulberry32) and draws
 Poisson counts with Knuth's method~\cite{knuth1997}. The source code is openly
 available on GitHub~\cite{thesiscode}, and a live version of the application
 can be used in any web browser~\cite{thesisapp}. The model and simulation code
-has about 3{,}200 lines in ten JavaScript files, in the
+has about 3{,}700 lines in eleven JavaScript files, in the
 \texttt{src/partitioning/lib} and \texttt{src/detection/lib} folders.
 Table~\ref{tab:codemap} shows where each part described in this paper is
 implemented. For this paper, we ran the
 same code outside the browser with Node.js 24.18.1, without changing the
-simulation code. The project has no automated tests; the checks in
-Section~\ref{sec:validation} were run as scripts that use the application's own
-code.
+simulation code.
+
+
+For CCR-UAV, the road is discretized into 100~m cells, with crash-risk weights derived from the fitted regional rates. A dynamic programming procedure partitions the corridor into $M$ contiguous patrol segments,
+minimizing the estimated risk-weighted waiting time while enforcing the maximum segment-length constraint in Eq.~\eqref{eq:ccr_length}.
+The procedure reports infeasibility when the available fleet cannot
+satisfy this constraint.
+
 
 \begin{table}[htbp]
 \centering
@@ -961,8 +991,12 @@ Fitted rates and their source & \texttt{risk-table.json} & (data file) \\
 Region lookup and blending & \texttt{risk-scoring.js} & \texttt{rateOverSpan}, \texttt{buildRiskMatrix} \\
 Crash generation & \texttt{accident-generator.js} & \texttt{samplePoisson}, \texttt{generateAccidentsForDay} \\
 Patrol segments & \texttt{uav-segments.js} & \texttt{buildUniformSegments}, \texttt{buildRiskAwareSegments} \\
+
+CCR-UAV allocation & \texttt{ccr-uav.js} & \texttt{buildCcrSegments}, \texttt{dpPartition}, \texttt{maxSegmentLength} \\
+
 Drone motion and alert time & \texttt{iot-alert.js} & \texttt{patrolPositionAndDirection}, \texttt{alertTimeForCandidateAtState}, \texttt{computeIotDetection} \\
-Trial loop, batteries, spare drones & \texttt{detection-sim.js} & \texttt{simulateOnce}, \texttt{DEFAULT\_PARAMS}, \texttt{makeRng} \\
+Trial loop and spare drones & \texttt{detection-sim.js} & \texttt{simulateOnce}, \texttt{DEFAULT\_PARAMS}, \texttt{makeRng} \\
+Battery swapping and docking & \texttt{batteryDocking.js} & \texttt{buildBatterySegments}, \texttt{simulateBatteryDocking} \\
 Repeated trials & \texttt{monteCarlo.js} & \texttt{runSweep} \\
 \bottomrule
 \end{tabular}
@@ -1048,7 +1082,7 @@ The variance inflation factors, which measure how much the risk factors overlap
 with each other, range from 1.53 to 3.16. All are well below the usual warning
 levels.
 
-Applying Equation~\ref{eq:aggregate} gives the table of rates in
+Applying Equation~\eqref{eq:aggregate} gives the table of rates in
 Table~\ref{tab:rates}, shown as a chart in Figure~\ref{fig:rates}. Two patterns
 stand out. The rate falls steadily from north to south. And in every region,
 the daytime rate is 1.4 to 2.0 times the night rate.
@@ -1116,7 +1150,7 @@ six times the rate of Jadra.}
 \label{fig:rates}
 \end{figure}
 
-\subsection{Validation}
+\subsection{In-Sample Model and Simulator Checks}
 \label{sec:validation}
 
 A big advantage of a rate model over a score is that it can be checked against
@@ -1133,13 +1167,10 @@ into a rate table and spread it over the 1~km sections. This is how we found
 that the midpoint method lost 0.8\% of crashes.
 
 \paragraph{Totals by Region.}
-The model has no separate term for each region, so nothing forces the regional
-totals to match. This makes it a real test. Figure~\ref{fig:validation}
-compares predicted and observed crashes for each region over the 31 months. The
-correlation is 0.990. Khalde is slightly over-predicted (469 against 437 observed)
-and Jiyeh under-predicted (149 against 178). The largest relative error is in
-Jadra, the region with the fewest crashes, where 37 crashes are predicted
-against 26 observed.
+
+The model has no separate term for each region, so nothing forces the regional totals to match. This comparison therefore provides a useful in-sample
+goodness-of-fit assessment of the geographical distribution of crashes, rather than an independent test of predictive performance.
+Figure~\ref{fig:validation} compares predicted and observed crashes for each region over the 31 months. The correlation is 0.990. Khalde is slightly over-predicted (469 against 437 observed) and Jiyeh under-predicted (149 against 178). The largest relative error is in Jadra, the region with the fewest crashes, where 37 crashes are predicted against 26 observed.
 
 \paragraph{Totals by Time of Day.}
 One weakness should be reported. The model predicts too many crashes in the
@@ -1148,8 +1179,10 @@ predicted, 279 observed). Traffic and speed are similar in the two rush hours,
 so the model cannot tell them apart, even though the real counts differ by a
 factor of two. Section~\ref{sec:discussion} returns to this.
 
-All three checks use the same data that the model was fitted on. No crashes
-were kept aside for testing.
+
+These three checks use the same data on which the model was fitted and therefore assess in-sample agreement rather than predictive performance.
+A separate chronological holdout validation is presented in
+Section~\ref{sec:holdout_validation}.
 
 \paragraph{Checks on the Simulator.}
 We also checked that the simulator produces what the rates say. Across the 550
@@ -1540,7 +1573,7 @@ code. We created three days of crashes from the rate table with a fixed seed
 (20260921) and used the risk-aware plan for five drones
 (Table~\ref{tab:segments}). To keep the example simple, every drone starts at
 the northern end of its segment at midnight and moves as in
-Equation~\ref{eq:motion}. We chose this crash because it shows why neighbouring
+Equation~\eqref{eq:motion}. We chose this crash because it shows why neighbouring
 segments are tested; it is an example, not a random sample.
 
 The crash happened on day 2 at 13:18, in section 3 (km 2--3) of the Khalde
@@ -1551,7 +1584,7 @@ drones tested are those in segments 1 and 2; there is no segment 0.
 \begin{itemize}[leftmargin=*,itemsep=2pt]
 \item The drone of segment 1 is at 0.647~km, flying north, away from the crash.
 It must fly back to km~0 and then south to the alert zone, about 3.32~km in
-total, which takes 414~s (case 3 of Equation~\ref{eq:cases}).
+total, which takes 414~s (case 3 of Equation~\eqref{eq:cases}).
 \item The drone of segment 2 is at 3.647~km, also flying north, which is towards
 the alert zone. It is 0.578~km away, which takes 72~s (case 4).
 \end{itemize}
@@ -1590,8 +1623,8 @@ narrow range of speeds it was measured over, 79 to 113~km/h. Within this range,
 a 10\% higher speed means about 33\% more crashes, which is similar to other
 studies. The result should not be used outside this range.
 
-The model explains the difference between day and night through traffic alone,
-without any separate term for the time of day. This is useful, because it means
+The model captures differences between day and night through traffic and speed
+covariates, without including separate time-of-day indicators. This is useful, because it means
 the model can be used on other roads where traffic is measured. However, the
 same property is why the model cannot tell the morning rush from the evening
 rush: traffic and speed are similar in both, but the evening has twice as many
@@ -1657,8 +1690,11 @@ points are equally important~\cite{elmaliach2009,portugal2011}. Our results
 suggest that weighting the patrol by a measured crash rate cuts the average
 alert time by 21\% to 26\% when drones are scarce. They also show that this
 weighting must respect how far a drone can fly in time, or it will miss crashes.
-This problem does not appear in methods that treat all points as equal,
-because in those methods it cannot happen.
+Uniform allocation avoids the excessively long
+segments created by concentrating UAVs in high-risk
+regions. However, uniform patrolling can also miss
+accidents when the fleet is too small to provide
+adequate coverage of the entire corridor.
 
 \subsection{Implications}
 
@@ -1667,9 +1703,11 @@ On roads where access is poorly controlled, roadside activity should be
 included as a main risk factor, not left out as background.
 
 \paragraph{For Practice.}
-A patrol system based on scores cannot be shown to be wrong. One based on rates
-can: the regional and time-of-day checks in Section~\ref{sec:validation} can be
-repeated every time the model is updated with new records. This is the
+Unlike uncalibrated expert-weighted scores, fitted crash-frequency models
+provide quantitative predictions that can be directly evaluated against
+observed accident records. The regional and time-of-day checks in
+Section~\ref{sec:validation} can be repeated every time the model is updated
+with new records. This is the
 strongest reason for the change shown here, whatever the exact numbers are. For
 planning, the results suggest that about 19 to 21 drones can detect 80\% of
 crashes within two minutes on this 28.6~km road, with a 200~m alert range and a
@@ -1713,9 +1751,9 @@ The model rests on simplifying assumptions that the data only partly support.
 It assumes that crashes rise in proportion to exposure, while the data suggest
 an elasticity of 1.33. It cannot separate the morning rush from the evening
 rush, as Section~\ref{sec:validation} shows, because traffic and speed are
-similar in both. Its rates are yearly averages, so the seasonal swing of about
-1.38 between July and January is averaged out and the simulator has no
-seasons. It does not model crash severity, so every simulated crash is treated
+similar in both. Its rates are averages over the 31-month observation period, so seasonal
+variations are incorporated into the aggregated rates rather than explicitly
+represented in the simulator. It does not model crash severity, so every simulated crash is treated
 the same and the patrol plan cannot yet favour the most serious crashes. All
 of its checks use the same data as the fit, because no crashes were kept aside
 for testing. Finally, the study is observational: it shows patterns, not
@@ -1753,22 +1791,14 @@ time slots; this limit is real but does not stop the model from being useful.
 Roadside activity is the strongest risk factor, with a rate ratio of 3.84,
 ahead of traffic, speed and road curves. The Poisson model fits well: the
 leftover spread is 1.13, and the negative binomial improves the fit by only
-3.4 AIC. The rates match the observed crash totals by region (correlation
-0.990), but they cannot tell the two rush hours apart. In the simulator, the
-risk-aware plan built on these rates cut the average alert time by 21\% to 26\%
-with 7 to 16 drones. It reached the target of detecting 80\% of crashes within
-two minutes with about 19 drones instead of 21. But for some fleet sizes it
-left a long, quiet southern segment almost uncovered, and missed about 7.7\% of
-crashes where the uniform plan missed none.
+3.4 AIC. The fitted rates show strong in-sample agreement with observed regional crash totals (correlation 0.990), but the model cannot distinguish between the two
+rush-hour periods. In the simulator, the risk-aware plan built on these rates cut the average alert time by 21\% to 26\% with 7 to 16 drones. It reached the target of detecting 80\% of crashes within two minutes with about 19 drones instead of 21. But for some fleet sizes it left a long, quiet southern segment almost uncovered, and missed about 7.7\% of crashes where the uniform plan missed none.
 
 \paragraph{Scientific Contribution.}
 The study shows three things. First, for crash modelling on a single road with
 limited data, what limits the results most is how precisely the crash records
-give locations, not how advanced the statistical method is. Second, even under
-this limit, a fitted rate model is better than an expert score, mainly because
-it can be checked against real data. Third, a drone patrol plan that follows
-crash risk must also respect how far a drone can fly in time; otherwise it
-trades a better average for crashes that are never found.
+give locations, not how advanced the statistical method is. Second, even under this limitation, a fitted crash-rate model provides a quantitative and interpretable basis
+for UAV patrol allocation, with predictions that can be evaluated against observed accident records. Third, a drone patrol plan that follows crash risk must also respect how far a drone can fly in time; otherwise it trades a better average for crashes that are never found.
 
 \paragraph{Recommendations for Future Work.}
 We suggest five next steps. First, limit every risk-aware segment to
@@ -1783,184 +1813,80 @@ perfect alert zone. Fifth, repeat the study on another road with strict access
 control, to test whether roadside activity matters as much elsewhere.
 
 % ===========================================================================
-\section*{Code and Data Availability}
 
-The source code of the Simulation-Aided Command Center, including the crash
-generator, the patrol-segment builders, the alert-time model, the Monte Carlo
-runner and the fitted rate table (\texttt{risk-table.json}) with its
-coefficients, is openly available at
-\url{https://github.com/hussein449/thesis_v2}~\cite{thesiscode}. The results in
-this paper were produced with commit \texttt{ec8791a}. A live version of the
-application runs in the web browser at
-\url{https://thesis-tool.netlify.app/}~\cite{thesisapp}, where the reader can
-run the patrol plans and the detection sweeps interactively. The raw ambulance
-records belong to the Lebanese Red Cross, and the \emph{tari2ak} GPS data were
-obtained through a collaboration with CNRS-L; neither dataset can be shared
-publicly. For this reason, the data panel and the Python script that fits the
-model are not included in the public repository.
+
+\section*{Author Contributions}
+
+\renewcommand{\arraystretch}{1.4}
+
+\begin{tabularx}{\linewidth}{
+@{}>{\bfseries}p{3.8cm}@{\hspace{1em}}X@{}
+}
+
+Hussein Nasereddine &
+Methodology, Software, Formal Analysis, Investigation,
+Visualization, Writing -- Original Draft. \\
+
+Ali Kalakech &
+Conceptualization, Methodology, Resources,
+Supervision, Project Administration,
+Writing -- Review \& Editing. \\
+
+Ghaleb Faour &
+Resources, Methodology, Validation,
+Writing -- Review \& Editing. \\
+
+Amin Haj Ali &
+Methodology, Validation,
+Writing -- Review \& Editing. \\
+
+Walid Al-Shaar &
+Validation, Writing -- Review \& Editing. \\
+
+Majd Ghareeb &
+Validation, Writing -- Review \& Editing. \\
+
+Ali Bazzi &
+Validation, Writing -- Review \& Editing.
+
+\end{tabularx}
 
 % ===========================================================================
-\begin{thebibliography}{99}
-\small
+\section*{Acknowledgments}
+The authors acknowledge the Lebanese Red Cross for providing historical road
+accident records and the National Council for Scientific Research of Lebanon
+(CNRS-L) for providing access to traffic data collected through the
+\emph{tari2ak} application.
 
-\bibitem{who2023}
-World Health Organization. \emph{Global Status Report on Road Safety 2023.}
-WHO, Geneva, 2023.
+% ===========================================================================
+\section*{Funding}
+The authors received no specific funding for this research.
 
-\bibitem{sanchez2010}
-R.~S\'anchez-Mangas, A.~Garc\'ia-Ferrer, A.~de~Juan, and A.~Mart\'in Arroyo.
-\emph{The probability of death in road traffic accidents. How important is a
-quick medical response?} Accident Analysis \& Prevention, 42(4):1048--1056,
-2010.
+% ===========================================================================
+\section*{Conflicts of Interest}
+The authors declare no conflicts of interest.
 
-\bibitem{byrne2019}
-J.~P. Byrne, N.~C. Mann, M.~Dai, S.~A. Mason, P.~Karanicolas, S.~Rizoli, and
-A.~B. Nathens. \emph{Association between emergency medical service response
-time and motor vehicle crash mortality in the United States.} JAMA Surgery,
-154(4):286--293, 2019.
+% ===========================================================================
+\section*{Ethics and Data Privacy}
+The accident records used in this study were provided by the Lebanese Red Cross in 2018
+without patient names. The retrospective analysis was conducted using historical records,
+and all results are reported as aggregated crash statistics. No individual patient
+information is disclosed in this manuscript.
 
-\bibitem{elmaliach2009}
-Y.~Elmaliach, N.~Agmon, and G.~A. Kaminka. \emph{Multi-robot area patrol under
-frequency constraints.} Annals of Mathematics and Artificial Intelligence,
-57(3--4):293--320, 2009.
+% ===========================================================================
+\section*{Declaration of AI Assistance}
+Generative AI tools (Claude and ChatGPT) were used to assist with manuscript drafting, and language refinement. All AI-assisted content was critically reviewed and approved by the authors, who take full
+responsibility for the accuracy, originality, and integrity of the manuscript.
 
-\bibitem{portugal2011}
-D.~Portugal and R.~Rocha. \emph{A survey on multi-robot patrolling algorithms.}
-Technological Innovation for Sustainability, IFIP AICT 349, 139--146. Springer,
-Berlin, 2011.
+% ===========================================================================
 
-\bibitem{outay2020}
-F.~Outay, H.~A. Mengash, and M.~Adnan. \emph{Applications of unmanned aerial
-vehicle (UAV) in road safety, traffic and highway infrastructure management:
-Recent advances and challenges.} Transportation Research Part A: Policy and
-Practice, 141:116--129, 2020.
+\section*{Data Availability}
 
-\bibitem{menouar2017}
-H.~Menouar, I.~Guvenc, K.~Akkaya, A.~S. Uluagac, A.~Kadri, and A.~Tuncer.
-\emph{UAV-enabled intelligent transportation systems for the smart city:
-Applications and challenges.} IEEE Communications Magazine, 55(3):22--28, 2017.
+The accident records used in this study were provided by the Lebanese Red Cross (LRC), while the traffic GPS data were provided by the Lebanese National Council for Scientific Research (CNRS-L).
+These datasets are not publicly available.
+Access is subject to authorization from the respective data providers.
 
-\bibitem{washington2020}
-S.~Washington, M.~G. Karlaftis, F.~Mannering, and P.~Anastasopoulos.
-\emph{Statistical and Econometric Methods for Transportation Data Analysis,}
-3rd edition. Chapman and Hall/CRC, Boca Raton, 2020.
-
-\bibitem{lordmannering2010}
-D.~Lord and F.~Mannering. \emph{The statistical analysis of crash-frequency
-data: A review and assessment of methodological alternatives.} Transportation
-Research Part A: Policy and Practice, 44(5):291--305, 2010.
-
-\bibitem{miaou1994}
-S.-P. Miaou. \emph{The relationship between truck accidents and geometric
-design of road sections: Poisson versus negative binomial regressions.}
-Accident Analysis \& Prevention, 26(4):471--482, 1994.
-
-\bibitem{cameron1990}
-A.~C. Cameron and P.~K. Trivedi. \emph{Regression-based tests for
-overdispersion in the Poisson model.} Journal of Econometrics, 46(3):347--364,
-1990.
-
-\bibitem{lord2005}
-D.~Lord, S.~P. Washington, and J.~N. Ivan. \emph{Poisson, Poisson-gamma and
-zero-inflated regression models of motor vehicle crashes: Balancing statistical
-fit and theory.} Accident Analysis \& Prevention, 37(1):35--46, 2005.
-
-\bibitem{hsm2010}
-American Association of State Highway and Transportation Officials.
-\emph{Highway Safety Manual,} 1st edition. AASHTO, Washington, DC, 2010.
-
-\bibitem{bonneson2012}
-J.~Bonneson, S.~Geedipally, M.~P. Pratt, and D.~Lord. \emph{Safety Prediction
-Methodology and Analysis Tool for Freeways and Interchanges.} NCHRP Project
-17-45 Final Report, Transportation Research Board, Washington, DC, 2012.
-
-\bibitem{park2010}
-B.-J. Park, K.~Fitzpatrick, and D.~Lord. \emph{Evaluating the effects of
-freeway design elements on safety.} Transportation Research Record,
-2195:58--69, 2010.
-
-\bibitem{hauer1997}
-E.~Hauer. \emph{Observational Before--After Studies in Road Safety.} Pergamon,
-Oxford, 1997.
-
-\bibitem{elvik2013}
-R.~Elvik. \emph{International transferability of accident modification
-functions for horizontal curves.} Accident Analysis \& Prevention, 59:487--496,
-2013.
-
-\bibitem{mannering2014}
-F.~L. Mannering and C.~R. Bhat. \emph{Analytic methods in accident research:
-Methodological frontier and future directions.} Analytic Methods in Accident
-Research, 1:1--22, 2014.
-
-\bibitem{kanistras2013}
-K.~Kanistras, G.~Martins, M.~J. Rutherford, and K.~P. Valavanis. \emph{A survey
-of unmanned aerial vehicles (UAVs) for traffic monitoring.} International
-Conference on Unmanned Aircraft Systems (ICUAS), 221--234, 2013.
-
-\bibitem{mozaffari2019}
-M.~Mozaffari, W.~Saad, M.~Bennis, Y.-H. Nam, and M.~Debbah. \emph{A tutorial
-on UAVs for wireless networks: Applications, challenges, and open problems.}
-IEEE Communications Surveys \& Tutorials, 21(3):2334--2360, 2019.
-
-\bibitem{erdelj2017}
-M.~Erdelj, E.~Natalizio, K.~R. Chowdhury, and I.~F. Akyildiz. \emph{Help from
-the sky: Leveraging UAVs for disaster management.} IEEE Pervasive Computing,
-16(1):24--32, 2017.
-
-\bibitem{petajajarvi2015}
-J.~Pet\"aj\"aj\"arvi, K.~Mikhaylov, A.~Roivainen, T.~H\"anninen, and
-M.~Pettissalo. \emph{On the coverage of LPWANs: Range evaluation and channel
-attenuation model for LoRa technology.} 14th International Conference on ITS
-Telecommunications (ITST), Copenhagen, 2015.
-
-\bibitem{vinodhini2025}
-M.~Vinodhini, S.~Rajkumar, and S.~K. Subramaniam. \emph{Real-time Internet of
-LoRa Things (IoLT)-based accident detection and prevention system in vehicular
-networks towards smart city.} International Journal of Communication Systems,
-38(1):e5692, 2025.
-
-\bibitem{worldbank2017}
-World Bank. \emph{Lebanon: Greater Beirut Public Transport Project.} Project
-Appraisal Document, Project ID P160224, Washington, DC, 2017.
-
-\bibitem{osm}
-OpenStreetMap contributors. \emph{Planet dump.}
-\texttt{https://planet.openstreetmap.org}, 2024. Open Database License,
-\texttt{https://www.openstreetmap.org/copyright}.
-
-\bibitem{hersbach2020}
-H.~Hersbach, B.~Bell, P.~Berrisford, et al. \emph{The ERA5 global reanalysis.}
-Quarterly Journal of the Royal Meteorological Society, 146(730):1999--2049,
-2020.
-
-\bibitem{balinski1982}
-M.~L. Balinski and H.~P. Young. \emph{Fair Representation: Meeting the Ideal of
-One Man, One Vote.} Yale University Press, New Haven, 1982.
-
-\bibitem{seabold2010}
-S.~Seabold and J.~Perktold. \emph{Statsmodels: Econometric and statistical
-modeling with Python.} Proceedings of the 9th Python in Science Conference,
-92--96, 2010.
-
-\bibitem{knuth1997}
-D.~E. Knuth. \emph{The Art of Computer Programming, Volume 2: Seminumerical
-Algorithms,} 3rd edition. Addison-Wesley, Reading, MA, 1997.
-
-\bibitem{mccullagh1989}
-P.~McCullagh and J.~A. Nelder. \emph{Generalized Linear Models,} 2nd edition.
-Chapman and Hall, London, 1989.
-
-\bibitem{thesiscode}
-H.~Nasereddine. \emph{Simulation-Aided Command Center: risk-driven UAV swarm
-patrol simulator for the M51 corridor} [source code]. GitHub repository,
-commit \texttt{ec8791a}, 2026. \url{https://github.com/hussein449/thesis_v2}
-(accessed 22 September 2026).
-
-\bibitem{thesisapp}
-H.~Nasereddine. \emph{Simulation-Aided Command Center} [web application].
-2026. \url{https://thesis-tool.netlify.app/} (accessed 22 September 2026).
-
-\end{thebibliography}
-
+% ===========================================================================
+\bibliographystyle{unsrt}
+\bibliography{references}
 \end{document}
