@@ -1,0 +1,459 @@
+{
+  "generated": "2026-11-22",
+  "note": "current code, battery-swap operational layer",
+  "settings": {
+    "fleets": [
+      1,
+      2,
+      3,
+      5,
+      7,
+      10,
+      13,
+      16,
+      20,
+      25,
+      30
+    ],
+    "trials": 50,
+    "trialDays": 30,
+    "dtS": 5,
+    "droneSpeedMs": 8,
+    "sensingRangeM": 200,
+    "windowS": 600,
+    "startHour": 8,
+    "seedRule": "seed(t,M) = 42 + 1009*t + 7919*M",
+    "operational": true,
+    "dockSwapTimeS": 120,
+    "dockCount": 5
+  },
+  "rows": [
+    {
+      "M": 1,
+      "uniform": {
+        "infeasible": false,
+        "events": 1825,
+        "under120Pct": 7,
+        "missedPct": 75.51,
+        "meanAlertS": 256.2,
+        "seS": 10.9,
+        "published": {
+          "meanAlertS": 265,
+          "under120Pct": 4.2,
+          "missedPct": 83.9
+        },
+        "deltaMeanS": -8.8,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1825,
+        "under120Pct": 7,
+        "missedPct": 75.51,
+        "meanAlertS": 256.2,
+        "seS": 10.9,
+        "published": {
+          "meanAlertS": 265,
+          "under120Pct": 4.2,
+          "missedPct": 83.9
+        },
+        "deltaMeanS": -8.8,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": true,
+        "minimumFleet": 12
+      }
+    },
+    {
+      "M": 2,
+      "uniform": {
+        "infeasible": false,
+        "events": 1906,
+        "under120Pct": 10.6,
+        "missedPct": 63.54,
+        "meanAlertS": 266.2,
+        "seS": 6,
+        "published": {
+          "meanAlertS": 257.2,
+          "under120Pct": 9.9,
+          "missedPct": 66.7
+        },
+        "deltaMeanS": 9,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1906,
+        "under120Pct": 12.9,
+        "missedPct": 59.97,
+        "meanAlertS": 243,
+        "seS": 5.6,
+        "published": {
+          "meanAlertS": 253.5,
+          "under120Pct": 12.1,
+          "missedPct": 61.7
+        },
+        "deltaMeanS": -10.5,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": true,
+        "minimumFleet": 12
+      }
+    },
+    {
+      "M": 3,
+      "uniform": {
+        "infeasible": false,
+        "events": 1876,
+        "under120Pct": 13.9,
+        "missedPct": 54.8,
+        "meanAlertS": 247.8,
+        "seS": 5.9,
+        "published": {
+          "meanAlertS": 252.9,
+          "under120Pct": 14,
+          "missedPct": 54.1
+        },
+        "deltaMeanS": -5.1,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1876,
+        "under120Pct": 17.4,
+        "missedPct": 44.14,
+        "meanAlertS": 252.5,
+        "seS": 5.1,
+        "published": {
+          "meanAlertS": 245.1,
+          "under120Pct": 18.7,
+          "missedPct": 44.8
+        },
+        "deltaMeanS": 7.4,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": true,
+        "minimumFleet": 12
+      }
+    },
+    {
+      "M": 5,
+      "uniform": {
+        "infeasible": false,
+        "events": 1820,
+        "under120Pct": 22.7,
+        "missedPct": 29.84,
+        "meanAlertS": 240.9,
+        "seS": 4.4,
+        "published": {
+          "meanAlertS": 245.1,
+          "under120Pct": 22.4,
+          "missedPct": 29
+        },
+        "deltaMeanS": -4.2,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1820,
+        "under120Pct": 27,
+        "missedPct": 20.88,
+        "meanAlertS": 222.6,
+        "seS": 4.9,
+        "published": {
+          "meanAlertS": 210.7,
+          "under120Pct": 29.7,
+          "missedPct": 22.1
+        },
+        "deltaMeanS": 11.9,
+        "beyondNoise": true
+      },
+      "ccr": {
+        "infeasible": true,
+        "minimumFleet": 12
+      }
+    },
+    {
+      "M": 7,
+      "uniform": {
+        "infeasible": false,
+        "events": 1898,
+        "under120Pct": 29.1,
+        "missedPct": 10.38,
+        "meanAlertS": 241.2,
+        "seS": 4.4,
+        "published": {
+          "meanAlertS": 226.5,
+          "under120Pct": 30.1,
+          "missedPct": 11.9
+        },
+        "deltaMeanS": 14.7,
+        "beyondNoise": true
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1898,
+        "under120Pct": 40.6,
+        "missedPct": 13.96,
+        "meanAlertS": 172.2,
+        "seS": 4.4,
+        "published": {
+          "meanAlertS": 168.1,
+          "under120Pct": 40.7,
+          "missedPct": 14.1
+        },
+        "deltaMeanS": 4.1,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": true,
+        "minimumFleet": 12
+      }
+    },
+    {
+      "M": 10,
+      "uniform": {
+        "infeasible": false,
+        "events": 1753,
+        "under120Pct": 42.4,
+        "missedPct": 0.29,
+        "meanAlertS": 179.8,
+        "seS": 3.5,
+        "published": {
+          "meanAlertS": 176.6,
+          "under120Pct": 43,
+          "missedPct": 0.2
+        },
+        "deltaMeanS": 3.2,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1753,
+        "under120Pct": 49.5,
+        "missedPct": 5.36,
+        "meanAlertS": 142,
+        "seS": 4.1,
+        "published": {
+          "meanAlertS": 139.7,
+          "under120Pct": 52,
+          "missedPct": 5.1
+        },
+        "deltaMeanS": 2.3,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": true,
+        "minimumFleet": 12
+      }
+    },
+    {
+      "M": 13,
+      "uniform": {
+        "infeasible": false,
+        "events": 1820,
+        "under120Pct": 55.8,
+        "missedPct": 0,
+        "meanAlertS": 122.1,
+        "seS": 2.8,
+        "published": {
+          "meanAlertS": 124.8,
+          "under120Pct": 55.1,
+          "missedPct": 0
+        },
+        "deltaMeanS": -2.7,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1820,
+        "under120Pct": 67.5,
+        "missedPct": 6.92,
+        "meanAlertS": 93.9,
+        "seS": 3.1,
+        "published": {
+          "meanAlertS": 94.7,
+          "under120Pct": 65.7,
+          "missedPct": 7.7
+        },
+        "deltaMeanS": -0.8,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": false,
+        "events": 1820,
+        "under120Pct": 56.6,
+        "missedPct": 0,
+        "meanAlertS": 120.2,
+        "seS": 2.3
+      }
+    },
+    {
+      "M": 16,
+      "uniform": {
+        "infeasible": false,
+        "events": 1854,
+        "under120Pct": 67.1,
+        "missedPct": 0,
+        "meanAlertS": 91.8,
+        "seS": 1.8,
+        "published": {
+          "meanAlertS": 93.4,
+          "under120Pct": 65.4,
+          "missedPct": 0
+        },
+        "deltaMeanS": -1.6,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1854,
+        "under120Pct": 76.1,
+        "missedPct": 7.98,
+        "meanAlertS": 73.4,
+        "seS": 2.3,
+        "published": {
+          "meanAlertS": 73.2,
+          "under120Pct": 74.9,
+          "missedPct": 7.6
+        },
+        "deltaMeanS": 0.2,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": false,
+        "events": 1854,
+        "under120Pct": 72.5,
+        "missedPct": 0,
+        "meanAlertS": 80.5,
+        "seS": 2.2
+      }
+    },
+    {
+      "M": 20,
+      "uniform": {
+        "infeasible": false,
+        "events": 1874,
+        "under120Pct": 77.9,
+        "missedPct": 0,
+        "meanAlertS": 64.2,
+        "seS": 1.9,
+        "published": {
+          "meanAlertS": 66.4,
+          "under120Pct": 77.4,
+          "missedPct": 0
+        },
+        "deltaMeanS": -2.2,
+        "beyondNoise": false
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1874,
+        "under120Pct": 82.3,
+        "missedPct": 0.43,
+        "meanAlertS": 64.7,
+        "seS": 2.1,
+        "published": {
+          "meanAlertS": 64.7,
+          "under120Pct": 82.1,
+          "missedPct": 0.8
+        },
+        "deltaMeanS": 0,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": false,
+        "events": 1874,
+        "under120Pct": 83.1,
+        "missedPct": 0,
+        "meanAlertS": 57.9,
+        "seS": 1.7
+      }
+    },
+    {
+      "M": 25,
+      "uniform": {
+        "infeasible": false,
+        "events": 1844,
+        "under120Pct": 89.5,
+        "missedPct": 0,
+        "meanAlertS": 42.7,
+        "seS": 1.1,
+        "published": {
+          "meanAlertS": 45.6,
+          "under120Pct": 88.2,
+          "missedPct": 0
+        },
+        "deltaMeanS": -2.9,
+        "beyondNoise": true
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1844,
+        "under120Pct": 88.2,
+        "missedPct": 0,
+        "meanAlertS": 48.6,
+        "seS": 1.4,
+        "published": {
+          "meanAlertS": 47.8,
+          "under120Pct": 88.1,
+          "missedPct": 0
+        },
+        "deltaMeanS": 0.8,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": false,
+        "events": 1844,
+        "under120Pct": 91.7,
+        "missedPct": 0,
+        "meanAlertS": 38.4,
+        "seS": 1
+      }
+    },
+    {
+      "M": 30,
+      "uniform": {
+        "infeasible": false,
+        "events": 1771,
+        "under120Pct": 95.9,
+        "missedPct": 0,
+        "meanAlertS": 33.6,
+        "seS": 1,
+        "published": {
+          "meanAlertS": 31.2,
+          "under120Pct": 96.5,
+          "missedPct": 0
+        },
+        "deltaMeanS": 2.4,
+        "beyondNoise": true
+      },
+      "risk-aware": {
+        "infeasible": false,
+        "events": 1771,
+        "under120Pct": 95.7,
+        "missedPct": 0,
+        "meanAlertS": 32.5,
+        "seS": 1,
+        "published": {
+          "meanAlertS": 32.5,
+          "under120Pct": 95.5,
+          "missedPct": 0
+        },
+        "deltaMeanS": 0,
+        "beyondNoise": false
+      },
+      "ccr": {
+        "infeasible": false,
+        "events": 1771,
+        "under120Pct": 96.2,
+        "missedPct": 0,
+        "meanAlertS": 25.9,
+        "seS": 0.8
+      }
+    }
+  ]
+}
